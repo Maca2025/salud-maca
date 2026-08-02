@@ -137,6 +137,34 @@ function editarSuplemento(id){
           </div>
         </div>
 
+        <div class="form-grid">
+          <div class="form-campo">
+            <label for="su-existencias">Piezas que te quedan</label>
+            <input type="number" step="1" inputmode="numeric" id="su-existencias"
+              value="${existenciasDe(s) || ''}" placeholder="0">
+            <span class="form-hint">A ojo vale: el cálculo se va corrigiendo solo
+              conforme registras días.</span>
+          </div>
+          <div class="form-campo">
+            <label for="su-fechastock">Contadas el día</label>
+            <input type="date" id="su-fechastock" value="${fechaStockDe(s)}" max="${hoyISO()}">
+            <span class="form-hint">Desde esa fecha la app descuenta lo que marcas.</span>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-campo">
+            <label for="su-caducidad">Caduca el</label>
+            <input type="date" id="su-caducidad" value="${caducidadDe(s)}">
+            <span class="form-hint">Opcional. Avisa a los 60 días y en rojo si ya pasó.</span>
+          </div>
+          <div class="form-campo" style="display:flex;flex-direction:column;justify-content:center">
+            <button type="button" class="blk-btn ghost" onclick="envaseNuevo()">📦 Envase nuevo</button>
+            <span class="form-hint">Abriste uno sin empezar: pone las existencias al total
+              del envase y la fecha de hoy. No hay que contar nada.</span>
+          </div>
+        </div>
+
         ${txt('link','Enlace de compra','https://…',s.link)}
 
         <div class="form-sec">Información</div>
@@ -152,6 +180,24 @@ function editarSuplemento(id){
     </div>
   </div>`;
   if(nuevo) setTimeout(()=>{ const e=document.getElementById('su-id'); if(e) e.focus(); }, 60);
+}
+
+/* Abriste un envase sin empezar: existencias = lo que trae, fecha = hoy.
+   Rellena los campos; se guarda al pulsar Guardar como cualquier otro cambio. */
+function envaseNuevo(){
+  const u = document.getElementById('su-unidades');
+  const e = document.getElementById('su-existencias');
+  const f = document.getElementById('su-fechastock');
+  const msg = document.getElementById('su-msg');
+  if(!u || !e || !f) return;
+  if(!(Number(u.value) > 0)){
+    if(msg){ msg.className='form-msg err'; msg.textContent='Primero pon cuántas piezas trae el envase.'; }
+    u.focus();
+    return;
+  }
+  e.value = Number(u.value);
+  f.value = hoyISO();
+  if(msg){ msg.className='form-msg info'; msg.textContent='Envase nuevo. Dale a Guardar para que quede.'; }
 }
 
 async function guardarSuplementoForm(nuevo){
@@ -179,6 +225,9 @@ async function guardarSuplementoForm(nuevo){
     por_toma: v('portoma')==='' ? '' : Number(v('portoma')),
     frecuencia: v('frecuencia'),
     envase_de: v('envase'),
+    existencias: v('existencias')==='' ? '' : Number(v('existencias')),
+    fecha_stock: v('fechastock'),
+    caducidad: v('caducidad'),
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';

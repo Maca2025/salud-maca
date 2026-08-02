@@ -93,6 +93,76 @@ function gruposDeEnvase(lista){
   return g;
 }
 
+const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+function existenciasDe(s){ const n = Number(campo_(s,'existencias','existencias')); return n > 0 ? n : 0; }
+function fechaStockDe(s){ const v = String(campo_(s,'fecha_stock','fechaStock')).trim(); return RE_FECHA.test(v) ? v : ''; }
+function caducidadDe(s){  const v = String(campo_(s,'caducidad','caducidad')).trim();   return RE_FECHA.test(v) ? v : ''; }
+
+/* Días hasta caducar. Negativo = ya caducó. null = sin fecha. */
+function diasParaCaducar(cad, hoy){
+  if(!RE_FECHA.test(String(cad||''))) return null;
+  return Math.round((new Date(cad+'T00:00:00') - new Date((hoy||hoyISO())+'T00:00:00')) / 86400000);
+}
+
+/* ────────────────────────────────────────────────────────────
+   CUÁNTO QUEDA DE UN ENVASE
+
+   Se descuenta por lo REGISTRADO, no por lo declarado: si dices
+   «diario» pero lo tomas cinco de cada siete días, el bote dura más
+   y el cálculo lo refleja solo.
+
+   Lo que el método NO puede saber: un día que tomaste pero no
+   marcaste. Ese día no se descuenta y el número va optimista. Por eso
+   devuelve `cobertura` — qué porcentaje de los días transcurridos
+   tienen registro — y la tarjeta avisa cuando baja del 70 %.
+
+   Con menos de una semana desde el conteo no hay datos suficientes
+   para medir el ritmo real, así que se cae a la frecuencia declarada
+   y se marca `estimado`.
+   ──────────────────────────────────────────────────────────── */
+function stockDe(id){
+  const s = supById(id); if(!s) return null;
+  const raiz  = supById(envaseDe(s)) || s;
+  const total = existenciasDe(raiz);
+  const desde = fechaStockDe(raiz);
+  if(!total || !desde) return null;
+
+  const hoy = hoyISO();
+  const raizId = envaseDe(raiz);
+  const grupo = supsEnJuego().filter(x => envaseDe(x) === raizId);
+
+  // Un día cuenta una sola vez aunque tenga varios guardados
+  const porDia = {};
+  (typeof _regEntries !== 'undefined' ? (_regEntries || []) : []).forEach(e => {
+    const iso = entryFechaISO(e);
+    if(!iso || iso < desde || iso > hoy) return;
+    if(!porDia[iso]) porDia[iso] = {};
+    const t = entryTomas(e);
+    Object.keys(t).forEach(k => { if(t[k]) porDia[iso][k] = true; });
+  });
+  const diasReg = Object.keys(porDia);
+
+  let consumidas = 0;
+  diasReg.forEach(d => grupo.forEach(x => { if(porDia[d][x.id]) consumidas += porTomaDe(x); }));
+
+  const restantes = Math.max(0, total - consumidas);
+  const transcurridos = Math.max(1,
+    Math.round((new Date(hoy+'T00:00:00') - new Date(desde+'T00:00:00')) / 86400000) + 1);
+  const cobertura = Math.min(100, Math.round(diasReg.length / transcurridos * 100));
+
+  let ritmo = transcurridos >= 7 ? consumidas / transcurridos : 0;
+  let estimado = false;
+  if(!(ritmo > 0)){ ritmo = grupo.reduce((t,x) => t + piezasDia(x), 0); estimado = true; }
+
+  return {
+    restantes, total, cobertura, estimado,
+    dias: ritmo > 0 ? Math.floor(restantes / ritmo) : null,
+    compartido: grupo.length > 1,
+    raiz: raiz.id,
+    desde
+  };
+}
+
 /* Los suplementos que de verdad entran en los cálculos del día. */
 function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
 function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }
