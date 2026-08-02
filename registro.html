@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#1b4332"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Comida"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <link rel="manifest" href="manifest-registro.webmanifest"/>
+  <!-- iOS ignora los iconos del manifest: usa apple-touch-icon, y necesita PNG -->
+  <link rel="apple-touch-icon" href="icon-registro.png"/>
+  <link rel="icon" href="icon-registro.png"/>
+  <title>Comida</title>
+  <style>
+    :root{color-scheme:light}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+      background:#f7f7f5;color:#1a1a1a;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+    .caja{max-width:340px;text-align:center}
+    .ico{width:82px;height:82px;border-radius:19px;margin:0 auto 18px;display:block}
+    h1{font-size:1.15rem;color:#1b4332;margin-bottom:8px}
+    p{font-size:.86rem;color:#666;line-height:1.6;margin-bottom:18px}
+    .pasos{text-align:left;background:#fff;border:1.5px solid #d4edde;border-radius:13px;
+      padding:15px 17px;margin-bottom:18px}
+    .paso{display:flex;gap:11px;align-items:flex-start;font-size:.84rem;color:#444;
+      line-height:1.5;margin-bottom:11px}
+    .paso:last-child{margin-bottom:0}
+    .num{flex-shrink:0;width:23px;height:23px;border-radius:50%;background:#2d6a4f;color:#fff;
+      font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center}
+    .btn{display:block;width:100%;padding:14px;background:#2d6a4f;color:#fff;border:none;
+      border-radius:11px;font-size:.92rem;font-weight:700;text-decoration:none;
+      font-family:inherit;cursor:pointer}
+    .cargando{display:none}
+    body.standalone .instalar{display:none}
+    body.standalone .cargando{display:block}
+    body.standalone .ico{animation:lat 1.3s ease-in-out infinite}
+    @keyframes lat{0%,100%{opacity:.4}50%{opacity:1}}
+  </style>
+</head>
+<body>
+  <div class="caja">
+    <img src="icon-registro.png" alt="" class="ico">
+
+    <div class="instalar">
+      <h1>Registrar comida</h1>
+      <p>Este atajo abre directo en el registro, sin pasar por el inicio.
+         Añádelo a tu pantalla de inicio para tenerlo a un toque.</p>
+
+      <div class="pasos">
+        <div class="paso"><span class="num">1</span>
+          <span>Toca <strong>Compartir</strong> abajo (el cuadrito con la flecha hacia arriba).</span></div>
+        <div class="paso"><span class="num">2</span>
+          <span>Baja y elige <strong>Añadir a pantalla de inicio</strong>.</span></div>
+        <div class="paso"><span class="num">3</span>
+          <span>Debe decir <strong>Comida</strong> con el ícono del plato. Toca <strong>Añadir</strong>.</span></div>
+      </div>
+
+      <a class="btn" href="index.html?ir=ingesta">Ir al registro ahora →</a>
+    </div>
+
+    <div class="cargando">
+      <h1>Abriendo el registro…</h1>
+    </div>
+  </div>
+
+  <script>
+    /* Si ya se abrió desde la pantalla de inicio, entra directo al registro.
+       Si se está viendo en el navegador, se muestran las instrucciones: antes
+       redirigía tan rápido que terminabas añadiendo la app principal por error. */
+    (function () {
+      var standalone = window.navigator.standalone === true ||
+                       (window.matchMedia &&
+                        window.matchMedia('(display-mode: standalone)').matches);
+      if (standalone) {
+        document.body.className = 'standalone';
+        location.replace('index.html?ir=ingesta');
+      }
+    })();
+  </script>
+</body>
+</html>

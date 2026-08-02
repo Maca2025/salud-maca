@@ -1,0 +1,19 @@
+{
+  "name": "Registrar comida",
+  "short_name": "Comida",
+  "description": "Registro rapido de lo que comes",
+  "start_url": "./index.html?ir=ingesta",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f7f5",
+  "theme_color": "#2d6a4f",
+  "icons": [
+    {
+      "src": "icon-registro.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

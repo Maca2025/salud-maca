@@ -1,0 +1,45 @@
+{
+  "name": "Salud Maca",
+  "short_name": "Salud",
+  "description": "Composicion corporal, laboratorio, nutricion y suplementos",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f7f5",
+  "theme_color": "#2d6a4f",
+  "icons": [
+    {
+      "src": "icon-app.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Registrar comida",
+      "short_name": "Comida",
+      "url": "./index.html?ir=ingesta",
+      "icons": [
+        {
+          "src": "icon-registro.png",
+          "sizes": "180x180",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Tracker de suplementos",
+      "short_name": "Suplementos",
+      "url": "./index.html?ir=suplementos",
+      "icons": [
+        {
+          "src": "icon-app.png",
+          "sizes": "180x180",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}
