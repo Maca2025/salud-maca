@@ -6,6 +6,29 @@
 const G='#2d6a4f', R='#e74c3c', B='#2980b9', O='#e67e22', P='#8e44ad', GRID='#f0f0ed';
 const chartReg = {};
 
+/* ────────────────────────────────────────────────────────────
+   ESTADO DE UN SUPLEMENTO
+   Columna `estado` de la hoja Protocolo Suplementos:
+     activo      → se toma (es también lo que significa la celda vacía,
+                   para que las filas viejas no haya que tocarlas)
+     pendiente   → decidido pero todavía sin comprar. Se ve en el
+                   protocolo, pero no cuenta en adherencia, ni en costo,
+                   ni en el progreso del bloque: un producto que no
+                   tienes en casa no es un olvido.
+     suspendido  → ya no se toma. Se filtra en hidratar() y ni siquiera
+                   entra en memoria.
+   ──────────────────────────────────────────────────────────── */
+function estadoSup(s){
+  const e = String((s && s.estado) || '').trim().toLowerCase();
+  return e || 'activo';
+}
+function supPorComprar(s){ return estadoSup(s) === 'pendiente'; }
+function supSuspendido(s){ return estadoSup(s) === 'suspendido'; }
+
+/* Los suplementos que de verdad entran en los cálculos del día. */
+function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
+function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }
+
 function mkLine(id, datasets, yOpts={}, extraOpts={}) {
   const labels = DATA.map(d=>d.fecha);
   if(chartReg[id]) chartReg[id].destroy();

@@ -94,7 +94,9 @@ function hidratar(d){
 
   // ── Suplementos y textos clínicos ──
   SUPS.length = 0;
-  (d.suplementos || []).forEach(s => SUPS.push(s));
+  // Los suspendidos no entran en memoria: no se muestran, no se cuentan
+  // y no pueden reaparecer por accidente en ningún cálculo.
+  (d.suplementos || []).forEach(s => { if(!supSuspendido(s)) SUPS.push(s); });
   // Tabla de alimentos: primero, porque los planes la necesitan
   ALIMENTOS = d.alimentos || [];
   _indiceAlimentos = null;

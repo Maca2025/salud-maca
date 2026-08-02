@@ -675,22 +675,50 @@ function resetBloques(){
    El payload se indexa por ID de suplemento, no por posición ni por
    columna. Así el registro sigue siendo correcto aunque muevas el
    suplemento de bloque, lo reordenes, o agregues/quites otros.
+
+   TRES ESTADOS, no dos. Antes todo lo que no estuviera marcado se
+   mandaba como 0, así que guardar a mediodía escribía la tarde y la
+   noche enteras como olvido. Ahora:
+
+     tomados     → 1   lo marcaste
+     todos       → 0   lo viste y lo dejaste sin marcar
+     pendientes  → ''  su bloque todavía no ha cerrado su ventana
+
+   La celda vacía es la que faltaba: no es un cero, es "aún no tocaba".
+   Solo existe registrando HOY; en un día pasado todo lo que no marcas
+   es un cero de verdad, porque estás respondiendo por el día completo.
 ================================================================ */
+
+/* true si el bloque del suplemento todavía no ha cerrado su ventana.
+   Se apoya en estadoBloque(), que ya devuelve 'neutro' cuando la fecha
+   activa no es hoy — por eso el registro retroactivo no genera vacías. */
+function supEnEspera(s){
+  if(supPorComprar(s)) return false;
+  const b = bloqueDeSup(s.id);
+  if(!b) return false;
+  const est = estadoBloque(b);
+  return est === 'proximo' || est === 'ahora';
+}
+
 async function guardarDia() {
   const btn = document.getElementById('btn-guardar-dia');
   const msg = document.getElementById('save-msg');
   const fecha = fechaActiva;
   const hora  = horaAhora();
 
-  const tomados = SUPS.filter(s => trackerState[s.id]).map(s => s.id);
-  const todos   = SUPS.map(s => s.id);
+  const enJuego    = supsEnJuego();
+  const tomados    = enJuego.filter(s => trackerState[s.id]).map(s => s.id);
+  const pendientes = enJuego.filter(s => !trackerState[s.id] && supEnEspera(s)).map(s => s.id);
+  const espera     = new Set(pendientes);
+  const todos      = enJuego.filter(s => !espera.has(s.id)).map(s => s.id);
 
   // ── Protección contra pérdida de datos ──
   // Si la hoja ya tenía tomas marcadas y ahora se mandarían menos,
-  // se avisa antes de sobrescribir.
+  // se avisa antes de sobrescribir. Los que están en espera no cuentan:
+  // no se van a degradar, se van a dejar como estaban.
   if(yaRegistrado){
     const perdidos = Object.keys(yaRegistrado)
-      .filter(id => yaRegistrado[id] && !trackerState[id]);
+      .filter(id => yaRegistrado[id] && !trackerState[id] && !espera.has(id));
     if(perdidos.length){
       const nombres = perdidos
         .map(id => { const s = SUPS.find(x=>x.id===id); return s ? s.sustancia : id; })
@@ -701,8 +729,17 @@ async function guardarDia() {
       );
       if(!ok){ return; }
     }
-  } else if(!tomados.length){
+  } else if(!tomados.length && todos.length){
     if(!confirm('No hay nada marcado. ¿Guardar el día como sin tomas?')) return;
+  }
+
+  // Todo lo del día sigue en espera: no hay nada que escribir todavía.
+  if(!tomados.length && !todos.length){
+    if(msg){
+      msg.textContent = 'Todavía no toca ninguna toma. Vuelve más tarde.';
+      msg.style.display = 'inline';
+    }
+    return;
   }
 
   if(btn){ btn.textContent='⏳ Guardando…'; btn.disabled=true; }
@@ -711,15 +748,19 @@ async function guardarDia() {
     // Si no se pudo verificar lo ya registrado (sin conexión al abrir),
     // se pide modo merge para que el servidor no degrade tomas existentes.
     const modo = (yaRegistrado === null) ? 'merge' : 'reemplazo';
-    const r = await api({action:'save', fecha, hora, modo, tomados:tomados.join(','), todos:todos.join(',')});
+    const r = await api({action:'save', fecha, hora, modo,
+      tomados:tomados.join(','), todos:todos.join(','), pendientes:pendientes.join(',')});
     if(btn) btn.textContent = '✅ Guardado';
     if(msg){
-      msg.textContent = `${r.actualizado?'Actualizado':'Guardado'} ${fechaBonita(fecha)} ${hora} · ${tomados.length} tomas`;
+      const cola = pendientes.length ? ` · ${pendientes.length} aún por tocar` : '';
+      msg.textContent = `${r.actualizado?'Actualizado':'Guardado'} ${fechaBonita(fecha)} · ${tomados.length} tomas${cola}`;
       msg.style.display='inline';
     }
-    // Lo guardado pasa a ser la nueva base y el borrador deja de hacer falta
+    // Lo guardado pasa a ser la nueva base y el borrador deja de hacer falta.
+    // Los que quedaron en espera NO se anotan: siguen siendo "sin respuesta",
+    // y así el aviso de sobrescritura no los tratará como ceros al volver.
     yaRegistrado = {};
-    SUPS.forEach(s => { yaRegistrado[s.id] = !!trackerState[s.id]; });
+    enJuego.forEach(s => { if(!espera.has(s.id)) yaRegistrado[s.id] = !!trackerState[s.id]; });
     limpiarBorrador();
     renderAvisoDia();
     _regEntries = null;

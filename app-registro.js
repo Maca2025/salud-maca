@@ -50,7 +50,8 @@ function ordenSupsParaRegistro(){
   BLOQUES.forEach(b=>{
     (LAYOUT[b.id]||[]).forEach(id=>{
       const s = supById(id);
-      if(s) out.push({id:s.id, sustancia:s.sustancia, dosis:s.dosis, color:b.color});
+      if(s) out.push({id:s.id, sustancia:s.sustancia, dosis:s.dosis, color:b.color,
+                      hora:b.desde || '', bloque:b.label});
     });
   });
   // Suplementos que ya no están en el protocolo pero sí en el historial
@@ -79,15 +80,22 @@ function renderHistorial(entries) {
     const iso = entryFechaISO(e);
     const dm  = iso ? iso.slice(8,10)+'/'+iso.slice(5,7) : (e.fecha||'');
     const hr  = e.hora || (String(e.fecha||'').split(' ')[1] || '');
-    t += `<th style="min-width:36px;max-width:48px;padding:4px 2px">
+    // La hora de la cabecera es la de GUARDADO, no la de la toma. Se marca
+    // como tal: si registras a las 22:00 lo del día entero, ese 22:00 dice
+    // cuándo lo apuntaste, no cuándo te lo tomaste.
+    t += `<th style="min-width:36px;max-width:48px;padding:4px 2px" title="Registrado a las ${hr}">
       <span style="display:block;font-size:.62rem">${dm}</span>
-      <span style="display:block;font-size:.58rem;opacity:.75">${hr}</span></th>`;
+      <span style="display:block;font-size:.55rem;opacity:.6">✎${hr}</span></th>`;
   });
   t += '</tr></thead><tbody>';
   filas.forEach(f => {
+    // La hora que se muestra es la del BLOQUE al que pertenece: es cuándo
+    // toca tomarlo, que es la información útil. La hora real de la toma no
+    // se guarda en ningún sitio y no se finge que sí.
     t += `<tr><td style="text-align:left;font-size:.78rem;font-weight:600;white-space:normal;line-height:1.3">
       <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${f.color};margin-right:6px"></span>
-      ${esc(f.sustancia)}${f.baja?' <span style="font-size:.6rem;color:#bbb">(ya no se toma)</span>':''}</td>`;
+      ${esc(f.sustancia)}${f.hora?` <span style="font-size:.62rem;color:#999;font-weight:500">${esc(f.hora)}</span>`:''}${
+      f.baja?' <span style="font-size:.6rem;color:#bbb">(ya no se toma)</span>':''}</td>`;
     entries.forEach(e => {
       const v = entryTomas(e)[f.id];
       t += '<td>' + (v===true ? '✅' : v===false ? '—' : '<span style="color:#e5e5e5">·</span>') + '</td>';
@@ -95,6 +103,10 @@ function renderHistorial(entries) {
     t += '</tr>';
   });
   t += '</tbody></table>';
+  t += `<div class="reg-leyenda">
+    ✅ tomado · — no tomado · <span style="color:#ccc">·</span> sin respuesta (no cuenta ni a favor ni en contra).
+    La hora junto a cada suplemento es <strong>la de su bloque</strong>; el <strong>✎</strong> de cada columna
+    es la hora a la que guardaste ese día.</div>`;
   container.innerHTML = t;
 }
 
@@ -102,13 +114,19 @@ function renderAdherencia(entries) {
   const adh = document.getElementById('reg-adh-container');
   if(!entries.length){ adh.innerHTML='<p class="reg-status">Sin datos.</p>'; return; }
 
-  // Un día cuenta una sola vez aunque tenga varios guardados
+  // Un día cuenta una sola vez aunque tenga varios guardados.
+  // Tres estados, no dos: la clave ausente significa "no respondiste",
+  // que no es lo mismo que "no lo tomaste". Entre varios guardados del
+  // mismo día gana el sí, porque marcar es un acto y desmarcar no.
   const porDia = {};
   entries.forEach(e=>{
     const iso = entryFechaISO(e); if(!iso) return;
     if(!porDia[iso]) porDia[iso] = {};
     const tomas = entryTomas(e);
-    Object.keys(tomas).forEach(id=>{ if(tomas[id]) porDia[iso][id] = true; });
+    Object.keys(tomas).forEach(id=>{
+      if(tomas[id]) porDia[iso][id] = true;
+      else if(!(id in porDia[iso])) porDia[iso][id] = false;
+    });
   });
   const dias = Object.keys(porDia).sort();
   if(!dias.length){ adh.innerHTML='<p class="reg-status">Sin datos.</p>'; return; }
@@ -135,11 +153,22 @@ function renderAdherencia(entries) {
     previa = d;
   });
 
-  // % sobre los días efectivamente registrados
-  const filas = ordenSupsParaRegistro().map(f=>{
-    const count = dias.filter(d=>porDia[d][f.id]).length;
-    return {...f, count};
-  });
+  // % POR SUPLEMENTO, sobre los días en que ese suplemento tuvo respuesta.
+  // Antes el denominador era "días con cualquier registro", así que un día
+  // guardado a mediodía castigaba a todo lo de la noche. Ahora cada uno se
+  // mide solo contra los días en que de verdad contestaste por él.
+  const filas = ordenSupsParaRegistro()
+    .filter(f => !supPorComprar(supById(f.id)))
+    .map(f=>{
+      const base  = dias.filter(d => f.id in porDia[d]).length;
+      const count = dias.filter(d => porDia[d][f.id] === true).length;
+      return {...f, count, base};
+    });
+
+  // Días con algún bloque sin responder: ni tomado ni olvidado.
+  const sinCerrar = dias.filter(d =>
+    filas.some(f => !(f.id in porDia[d]))
+  ).sort().reverse();
 
   const cabecera = `
     <div class="adh-resumen">
@@ -148,18 +177,41 @@ function renderAdherencia(entries) {
       <div class="adh-stat"><strong>${dias.length}</strong><span>días registrados</span></div>
       <div class="adh-stat"><strong>${cobertura}%</strong><span>de ${transcurridos} días</span></div>
     </div>
-    <div class="adh-nota">Los porcentajes se calculan sobre los <strong>${dias.length} días que registraste</strong>,
-    no sobre los ${transcurridos} transcurridos. Así el % mide si tomaste el suplemento, no si abriste la app.</div>`;
+    <div class="adh-nota">Cada porcentaje se calcula sobre <strong>los días en que contestaste por ese
+    suplemento</strong>, no sobre los ${transcurridos} transcurridos ni sobre los ${dias.length} que abriste la app.
+    Un bloque que todavía no tocaba cuando guardaste no cuenta como olvido.</div>
+    ${sinCerrar.length ? `<div class="adh-abierto">
+      <strong>${sinCerrar.length} día${sinCerrar.length>1?'s':''} sin cerrar.</strong>
+      Quedaron bloques sin responder — ni tomados ni olvidados. No penalizan, pero tampoco suman.
+      <div class="adh-abierto-dias">${sinCerrar.slice(0,8).map(d=>
+        `<button class="adh-dia-chip" onclick="irARegistrarDia('${d}')">${d.slice(8,10)}/${d.slice(5,7)}</button>`
+      ).join('')}${sinCerrar.length>8?`<span class="adh-dia-mas">+${sinCerrar.length-8}</span>`:''}</div>
+    </div>` : ''}`;
 
-  const sorted = [...filas].sort((a,b)=>a.count-b.count);
+  const sorted = [...filas].sort((a,b)=>{
+    const pa = a.base ? a.count/a.base : 2;   // los que no tienen datos, al final
+    const pb = b.base ? b.count/b.base : 2;
+    return pa - pb;
+  });
   let h = cabecera + '<div class="adh-list">';
   sorted.forEach(s => {
-    const pct = Math.min(100, Math.round(s.count/dias.length*100));
+    if(!s.base){
+      h += `<div class="adh-item">
+        <div class="adh-slot-dot" style="background:${s.color}"></div>
+        <span class="adh-name">${esc(s.sustancia)}</span>
+        <span class="adh-frac" style="color:#bbb">sin datos</span>
+        <div class="adh-bar-wrap"><div class="adh-bar-fill" style="width:0%"></div></div>
+        <span class="adh-pct" style="color:#bbb">—</span>
+      </div>`;
+      return;
+    }
+    const pct = Math.min(100, Math.round(s.count/s.base*100));
     const color = pct>=80?'#2D6A4F':pct>=50?'#E67E22':'#C0392B';
+    const flojo = s.base < 5 ? ` <span class="adh-pocos" title="Pocos días para leer una tendencia">·${s.base}d</span>` : '';
     h += `<div class="adh-item">
       <div class="adh-slot-dot" style="background:${s.color}"></div>
-      <span class="adh-name">${esc(s.sustancia)}</span>
-      <span class="adh-frac">${s.count}/${dias.length}</span>
+      <span class="adh-name">${esc(s.sustancia)}${flojo}</span>
+      <span class="adh-frac">${s.count}/${s.base}</span>
       <div class="adh-bar-wrap"><div class="adh-bar-fill" style="width:${pct}%;background:${color}"></div></div>
       <span class="adh-pct" style="color:${color}">${pct}%</span>
     </div>`;
@@ -185,7 +237,10 @@ function renderCalendario(entries){
     if(e.nota) notasPorDia[iso] = e.nota;
   });
 
-  const totalSups = Math.max(1, ordenSupsParaRegistro().length);
+  // Los pendientes de comprar no cuentan: si no, la intensidad del día
+  // sale siempre baja por suplementos que ni siquiera tienes en casa.
+  const totalSups = Math.max(1, ordenSupsParaRegistro()
+    .filter(f => !supPorComprar(supById(f.id))).length);
   if(!_calMes){
     const ult = Object.keys(porDia).sort().pop();
     const d = ult ? new Date(ult+'T00:00:00') : new Date();

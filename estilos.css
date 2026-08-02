@@ -17,7 +17,10 @@ body {
    CSS MODULE: HEADER
    Barra superior verde. Clic navega a home.
 ══════════════════════════════════════════════════════════ */
-header { background: #2d6a4f; color: white; padding: 14px 20px; display:flex; align-items:center; gap:8px; }
+/* El padding-top respeta la barra de estado del iPhone. Sin esto, con
+   viewport-fit=cover el reloj y la batería se comen el título. */
+header { background: #2d6a4f; color: white; padding: 14px 20px; display:flex; align-items:center; gap:8px;
+         padding-top: calc(14px + env(safe-area-inset-top)); }
 .hdr-btn { background:rgba(255,255,255,.16); border:none; color:#fff; width:32px; height:32px; border-radius:8px; font-size:1rem; cursor:pointer; flex-shrink:0; line-height:1; }
 .hdr-btn:hover { background:rgba(255,255,255,.3); }
 
@@ -1091,3 +1094,43 @@ tr.recomp-win td{background:#f0fdf4;}
   font-size:.66rem;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
 .int-title{font-weight:700;display:block;margin-bottom:2px;color:#1B4332;}
 .sups-disclaimer{font-size:.74rem;color:#999;margin:16px 0 0;padding:10px 14px;background:#f5f5f5;border-radius:8px;line-height:1.5;}
+
+
+/* ══════════════════════════════════════════════════════════
+   CSS MODULE: FASE 1a — TERCER ESTADO Y REGISTRO RETROACTIVO
+   Tres estados en el tracker (tomado / no tomado / aún no tocaba),
+   suplementos por comprar, y días sin cerrar en el Registro.
+══════════════════════════════════════════════════════════ */
+
+/* Banner de día pasado: sustituye a los avisos de urgencia */
+.pend-retro { background:#eef4fb; border:1.5px solid #b9d4ee; color:#1e3a5f; }
+.pend-retro-sub { display:block; margin-top:5px; font-size:.76rem; color:#4a6b8a; line-height:1.5; font-weight:400; }
+.pend-nota { margin-top:8px; padding-top:7px; border-top:1px solid #e3efe8;
+             font-size:.72rem; color:#888; line-height:1.5; }
+
+/* Suplemento pendiente de comprar: visible, sin casilla, fuera de cuentas */
+.tracker-item.por-comprar { opacity:.62; background:#fcfbf7; }
+.tracker-item.por-comprar label { cursor:default; }
+.tracker-cb-hueco { width:22px; min-width:22px; height:22px; display:flex; align-items:center;
+                    justify-content:center; font-size:.9rem; opacity:.75; margin-top:1px; }
+.tag-comprar { display:inline-block; font-size:.6rem; font-weight:800; text-transform:uppercase;
+               letter-spacing:.06em; background:#fef3c7; color:#92400e; padding:1px 6px;
+               border-radius:10px; margin-left:5px; vertical-align:middle; }
+
+/* Días con bloques sin responder */
+.adh-abierto { background:#fffbeb; border:1.5px solid #fcd34d; border-radius:10px;
+               padding:10px 13px; margin-top:10px; font-size:.78rem; color:#78350f; line-height:1.5; }
+.adh-abierto-dias { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; align-items:center; }
+.adh-dia-chip { background:#fff; border:1px solid #fcd34d; color:#92400e; font-size:.72rem;
+                font-weight:700; padding:3px 9px; border-radius:14px; cursor:pointer; }
+.adh-dia-chip:hover { background:#fef3c7; }
+.adh-dia-mas { font-size:.72rem; color:#a16207; font-weight:600; }
+.adh-pocos { font-size:.64rem; color:#bbb; font-weight:600; }
+
+/* Leyenda de la tabla del registro */
+.reg-leyenda { margin-top:10px; font-size:.7rem; color:#999; line-height:1.6; }
+
+/* Aviso de suplementos sin precio */
+.costo-aviso { margin-top:10px; padding-top:9px; border-top:1px solid #f0ede3;
+               font-size:.74rem; color:#92400e; line-height:1.5; }
+.form-hint { display:block; margin-top:5px; font-size:.7rem; color:#999; line-height:1.5; }

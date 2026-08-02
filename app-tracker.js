@@ -97,18 +97,31 @@ function renderConflictos(){
 function renderPendientes(){
   const cont = document.getElementById('pendientes-hoy');
   if(!cont) return;
-  if(fechaActiva !== hoyISO()){ cont.innerHTML = ''; return; }
+
+  // Registro retroactivo: los avisos de urgencia solo tienen sentido en vivo.
+  // Completando un día pasado no hay nada "para más tarde" — hay que decir
+  // qué día se está completando y quitarse de en medio.
+  if(fechaActiva !== hoyISO()){
+    const enJuego = supsEnJuego();
+    const hechos  = enJuego.filter(s=>trackerState[s.id]).length;
+    cont.innerHTML = `<div class="pend-box pend-retro">
+      📅 Estás completando <strong>${fechaBonita(fechaActiva)}</strong> — llevas ${hechos} de ${enJuego.length}.
+      <span class="pend-retro-sub">Marca lo que tomaste ese día. Lo que dejes sin marcar se guarda como no tomado,
+      así que si no te acuerdas de algo, mejor déjalo y vuelve.</span></div>`;
+    return;
+  }
 
   const grupos = {ahora:[], pasado:[], proximo:[]};
   BLOQUES.forEach(b=>{
-    const faltan = (LAYOUT[b.id]||[]).filter(id => !trackerState[id]);
+    const faltan = idsEnJuego(LAYOUT[b.id]).filter(id => !trackerState[id]);
     if(!faltan.length) return;
     const est = estadoBloque(b);
     if(grupos[est]) grupos[est].push({b, n:faltan.length});
   });
 
-  const total = SUPS.length;
-  const hechos = SUPS.filter(s=>trackerState[s.id]).length;
+  const enJuego = supsEnJuego();
+  const total = enJuego.length;
+  const hechos = enJuego.filter(s=>trackerState[s.id]).length;
 
   if(hechos === total){
     cont.innerHTML = `<div class="pend-box pend-ok">🎉 Todo tomado hoy — ${total} de ${total}.
@@ -125,7 +138,10 @@ function renderPendientes(){
   if(grupos.ahora.length)   html += `<span class="pend-lbl">Toca ahora:</span>` + chip(grupos.ahora,'ahora');
   if(grupos.pasado.length)  html += `<span class="pend-lbl">Pendiente:</span>`  + chip(grupos.pasado,'pasado');
   if(grupos.proximo.length) html += `<span class="pend-lbl">Más tarde:</span>`  + chip(grupos.proximo,'proximo');
-  html += '</div></div>';
+  html += '</div>';
+  if(grupos.proximo.length) html += `<div class="pend-nota">Lo de «más tarde» no se guarda como olvido:
+    queda sin respuesta hasta que vuelvas.</div>`;
+  html += '</div>';
   cont.innerHTML = html;
 }
 
@@ -142,13 +158,16 @@ function renderHorario() {
   orden.forEach(b => {
     const ids   = LAYOUT[b.id] || [];
     const items = ids.map(supById).filter(Boolean);
-    const done  = items.filter(s => trackerState[s.id]).length;
-    const pct   = items.length ? Math.round(done / items.length * 100) : 0;
-    const todosMarcados = items.length > 0 && done === items.length;
+    // Los pendientes de comprar se ven, pero no cuentan para el progreso:
+    // un frasco que no tienes en casa no es un olvido.
+    const activos = items.filter(s => !supPorComprar(s));
+    const done  = activos.filter(s => trackerState[s.id]).length;
+    const pct   = activos.length ? Math.round(done / activos.length * 100) : 0;
+    const todosMarcados = activos.length > 0 && done === activos.length;
     const franja = (b.desde && b.hasta) ? `${b.desde}–${b.hasta}` : (b.desde || '');
 
     const est = estadoBloque(b);
-    const incompleto = done < items.length;
+    const incompleto = done < activos.length;
     html += `<div class="sups-slot est-${est}${est==='pasado'&&incompleto?' vencido':''}" data-blk-id="${b.id}">
       <div class="sups-slot-hdr" style="background:${b.color}">
         <span class="sups-slot-icon">${esc(b.icon)}</span>
@@ -171,10 +190,26 @@ function renderHorario() {
       html += `<div class="blk-empty" style="pointer-events:none">Bloque vacío — arrastra un suplemento aquí</div>`;
     }
     items.forEach(s => {
+      const alertIco = s.nivel===2?'🔴':s.nivel===1?'🟡':'';
+
+      // Pendiente de comprar: se ve para no olvidarlo, pero sin casilla.
+      // Sin casilla no se puede marcar, y sin marcar no ensucia el registro.
+      if(supPorComprar(s)){
+        html += `<div class="tracker-item por-comprar" id="ti-${s.id}" data-sup-id="${s.id}">
+          <span class="drag-handle" title="Arrastrar para mover o reordenar">⣿</span>
+          <span class="tracker-cb-hueco" title="Todavía no lo tienes">🛒</span>
+          <label>
+            <strong>${esc(s.sustancia)} ${alertIco} <span class="tag-comprar">por comprar</span></strong>
+            <em>${esc(s.dosis)} · ${esc(s.formato)}</em>
+            <span>No cuenta en la adherencia ni en el costo hasta que lo tengas.</span>
+          </label>
+        </div>`;
+        return;
+      }
+
       const chk = trackerState[s.id] ? 'checked' : '';
       const guardado = !!(yaRegistrado && yaRegistrado[s.id]);
       const cls = (trackerState[s.id] ? 'checked' : '') + (guardado ? ' ya-guardado' : '');
-      const alertIco = s.nivel===2?'🔴':s.nivel===1?'🟡':'';
       html += `<div class="tracker-item ${cls}" id="ti-${s.id}" data-sup-id="${s.id}">
         <span class="drag-handle" title="Arrastrar para mover o reordenar">⣿</span>
         <input type="checkbox" class="tracker-cb" id="cb-${s.id}" ${chk} onchange="toggleTracker('${s.id}',this)">
@@ -189,7 +224,7 @@ function renderHorario() {
     html += `</div>
       <div class="sups-progress-bar-wrap">
         <div class="sups-prog-bar"><div class="sups-prog-fill" id="pbar-${b.id}" style="width:${pct}%;background:${b.color}"></div></div>
-        <span class="sups-prog-txt" id="ptxt-${b.id}" style="color:${b.color}">${done}/${items.length}</span>
+        <span class="sups-prog-txt" id="ptxt-${b.id}" style="color:${b.color}">${done}/${activos.length}</span>
       </div>
     </div>`;
   });
@@ -206,7 +241,7 @@ function toggleTracker(id, cb) {
   if (item) item.classList.toggle('checked', cb.checked);
   const b = bloqueDeSup(id);
   if (!b) return;
-  const ids  = LAYOUT[b.id] || [];
+  const ids  = idsEnJuego(LAYOUT[b.id]);
   const done = ids.filter(x => trackerState[x]).length;
   const pct  = ids.length ? Math.round(done/ids.length*100) : 0;
   const bar = document.getElementById('pbar-'+b.id);
@@ -215,6 +250,7 @@ function toggleTracker(id, cb) {
   if(txt) txt.textContent = done+'/'+ids.length;
   const slot = document.querySelector(`.sups-slot[data-blk-id="${b.id}"]`);
   if(slot) slot.classList.toggle('vencido', estadoBloque(b)==='pasado' && done < ids.length);
+  // (ids ya viene filtrado de pendientes de comprar)
   const btn = slot && slot.querySelector('.blk-check-btn');
   if(btn) btn.textContent = (done===ids.length && ids.length) ? '☑ todo' : '☐ todo';
   renderPendientes();
@@ -230,7 +266,7 @@ function resetTracker() {
 
 /* Marca o desmarca todos los suplementos de un bloque de una vez. */
 function toggleBloque(blkId){
-  const ids = LAYOUT[blkId] || [];
+  const ids = idsEnJuego(LAYOUT[blkId]);
   if(!ids.length) return;
   const todosMarcados = ids.every(id => trackerState[id]);
   ids.forEach(id => { trackerState[id] = !todosMarcados; });
@@ -474,7 +510,11 @@ function renderCostos(){
   const cont = document.getElementById('sups-costo');
   if(!cont) return;
 
-  const conPrecio = SUPS.filter(s => Number(s.precio) > 0);
+  // Los pendientes de comprar no entran en "reponer todo": reponer es
+  // volver a comprar algo que se acabó, no comprar algo que nunca tuviste.
+  const enJuego = supsEnJuego();
+  const conPrecio = enJuego.filter(s => Number(s.precio) > 0);
+  const porComprar = SUPS.filter(supPorComprar);
   if(!conPrecio.length){ cont.innerHTML = ''; return; }
 
   const totalEnvases = conPrecio.reduce((t,s) => t + Number(s.precio), 0);
@@ -488,7 +528,7 @@ function renderCostos(){
 
   const fmt = n => '$' + Math.round(n).toLocaleString('es-MX');
   const caros = [...conPrecio].sort((a,b)=>Number(b.precio)-Number(a.precio)).slice(0,3);
-  const sinPrecio = SUPS.length - conPrecio.length;
+  const sinPrecio = enJuego.length - conPrecio.length;
 
   cont.innerHTML = `
     <div class="costo-box">
@@ -501,6 +541,12 @@ function renderCostos(){
       <div class="costo-top">Los tres más caros:
         ${caros.map(s=>`<span class="costo-chip">${esc(s.sustancia)} ${fmt(Number(s.precio))}</span>`).join('')}
       </div>
+      ${sinPrecio ? `<div class="costo-aviso">⚠️ <strong>${sinPrecio} de ${enJuego.length}</strong> no tienen precio,
+        así que el total va corto. Se ponen en Protocolo → Editar.</div>` : ''}
+      ${porComprar.length ? `<div class="costo-nota">
+        ${porComprar.length} pendiente${porComprar.length>1?'s':''} de comprar, fuera de este total:
+        ${porComprar.map(s=>esc(s.sustancia)).join(' · ')}.
+      </div>` : ''}
       ${conDatos < conPrecio.length ? `<div class="costo-nota">
         Para estimar el gasto mensual completo, agrega en la hoja
         <em>Protocolo Suplementos</em> las columnas <code>unidades</code>

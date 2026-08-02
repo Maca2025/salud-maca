@@ -76,6 +76,19 @@ function editarSuplemento(id){
         </div>
 
         <div class="form-grid">
+          <div class="form-campo">
+            <label for="su-estado">Estado</label>
+            <select id="su-estado">
+              <option value="activo"     ${estadoSup(s)==='activo'?'selected':''}>Activo — lo tomo</option>
+              <option value="pendiente"  ${estadoSup(s)==='pendiente'?'selected':''}>🛒 Por comprar — todavía no lo tengo</option>
+              <option value="suspendido" ${estadoSup(s)==='suspendido'?'selected':''}>Suspendido — ya no lo tomo</option>
+            </select>
+            <span class="form-hint">Los que están por comprar se ven en el protocolo pero no cuentan
+              en la adherencia ni en el costo. Los suspendidos desaparecen de la app sin borrar su historial.</span>
+          </div>
+        </div>
+
+        <div class="form-grid">
           ${txt('sitio','Dónde lo compras','Amazon',s.sitio)}
           <div class="form-campo">
             <label for="su-precio">Precio <span class="op">$</span></label>
@@ -119,6 +132,9 @@ async function guardarSuplementoForm(nuevo){
     precio: v('precio')==='' ? '' : Number(v('precio')),
     link:v('link'), slot:v('slot'), nivel:Number(v('nivel'))||0,
     beneficio:v('beneficio'), absorcion:v('absorcion'), alerta:v('alerta'),
+    // La columna `estado` puede no existir todavía en la hoja: editarDato
+    // la crea al vuelo la primera vez que se guarda.
+    estado:v('estado'),
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';
