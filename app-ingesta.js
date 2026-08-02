@@ -220,7 +220,7 @@ function dictarComida(){
 /* Alternativa: campo de texto donde puede usar el dictado del teclado */
 function pedirTextoComida(){
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal" style="max-width:400px">
       <div class="blk-modal-hdr"><span>🎤 ¿Qué comiste?</span>
         <button onclick="cerrarForm()">×</button></div>
@@ -307,7 +307,7 @@ function revisarComida(datos, origen){
   }).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal" style="max-width:420px">
       <div class="blk-modal-hdr"><span>Revisar lo que entendí</span>
         <button onclick="cerrarForm()">×</button></div>
@@ -368,7 +368,7 @@ function verComidasPlan(){
   }).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal" style="max-width:400px">
       <div class="blk-modal-hdr"><span>🍽️ Tu plan de hoy · ${esc(dia)}</span>
         <button onclick="cerrarForm()">×</button></div>

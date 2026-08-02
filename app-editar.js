@@ -22,7 +22,7 @@ function editarSuplemento(id){
     </div>`;
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>${nuevo?'Nuevo suplemento':'Editar suplemento'}</span>
         <button onclick="cerrarForm()">×</button></div>
@@ -244,7 +244,7 @@ function editarObjetivo(key){
     </div>`;
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>Objetivo · ${esc(m.label)}</span>
         <button onclick="cerrarForm()">×</button></div>

@@ -142,7 +142,7 @@ function revisarAlimentos(nuevos){
     </tr>`).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>✨ Revisar alimentos estimados</span>
         <button onclick="cerrarForm()">×</button></div>

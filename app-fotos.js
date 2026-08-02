@@ -496,7 +496,7 @@ function abrirRefechar(fecha){
   _refDe = fecha;
   const n = _fotos.filter(f=>f.fecha===fecha).length;
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal" style="max-width:380px">
       <div class="blk-modal-hdr"><span>📅 Fecha de la sesión</span>
         <button onclick="cerrarForm()">×</button></div>
@@ -563,7 +563,7 @@ async function verFotoGrande(id){
   const i = serie.findIndex(x=>x.id===id);
   const host = document.getElementById('form-host');
   host.innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="big-wrap">
       <div style="color:#fff;padding:40px 0"><span class="lector-spin">⏳</span></div>
     </div>
@@ -573,7 +573,7 @@ async function verFotoGrande(id){
   catch(e){ host.innerHTML = ''; alert('No se pudo abrir: ' + e.message); return; }
   const m = medicionCerca(f.fecha);
   host.innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="big-wrap">
       <img src="${url}" alt="${esc(f.fecha)} ${esc(nombrePose(f.pose))}">
       <div class="big-pie">${esc(nombrePose(f.pose))} · ${esc(f.fecha)}
@@ -643,7 +643,7 @@ function abrirSubirFotos(fechaPre, posePre){
   _subidaPoseFija = posePre || null;
   const p = posePre ? POSTURAS.find(x=>x.id===posePre) : null;
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal" style="max-width:440px">
       <div class="blk-modal-hdr"><span>📸 ${p?`Subir ${esc(p.nombre)}`:'Nueva sesión'}</span>
         <button onclick="cerrarForm()">×</button></div>

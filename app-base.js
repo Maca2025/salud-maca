@@ -25,6 +25,27 @@ function estadoSup(s){
 function supPorComprar(s){ return estadoSup(s) === 'pendiente'; }
 function supSuspendido(s){ return estadoSup(s) === 'suspendido'; }
 
+/* ────────────────────────────────────────────────────────────
+   CERRAR UN MODAL AL TOCAR FUERA, SIN PERDER LO ESCRITO
+
+   El fondo oscuro cierra el formulario cuando se hace clic en él.
+   El problema: al seleccionar texto dentro de un campo y soltar el
+   ratón fuera del recuadro, el navegador dispara un `click` cuyo
+   destino ES el fondo. El formulario se cerraba en mitad de una
+   edición y se perdía todo lo escrito. Pasaba justo en los campos
+   largos, que son los que más se editan.
+
+   La solución: un clic solo cierra si EMPEZÓ y TERMINÓ en el fondo.
+   Si el botón del ratón se apretó dentro del formulario, no cuenta.
+   ──────────────────────────────────────────────────────────── */
+let _fondoAbajo = false;
+function fondoDown(ev, el){ _fondoAbajo = (ev.target === el); }
+function fondoClick(ev, el){
+  const empezoFuera = _fondoAbajo;
+  _fondoAbajo = false;
+  if(ev.target === el && empezoFuera) cerrarForm();
+}
+
 /* Los suplementos que de verdad entran en los cálculos del día. */
 function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
 function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }

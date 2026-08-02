@@ -54,7 +54,7 @@ async function procesarDocumento(tipo, file){
     else if(tipo === 'plan') revisarPlan(r.datos);
   } catch(e){
     document.getElementById('form-host').innerHTML = `
-    <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+    <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
       <div class="form-modal" style="max-width:400px">
         <div class="blk-modal-hdr"><span>No se pudo leer</span>
           <button onclick="cerrarForm()">×</button></div>
@@ -98,7 +98,7 @@ function revisarPlan(datos){
   }).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>🥗 Revisar plan extraído</span>
         <button onclick="cerrarForm()">×</button></div>
@@ -160,7 +160,7 @@ function abrirFormAnalisis(pre){
     </div>`).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarForm()">
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>🩸 Nuevo análisis</span>
         <button onclick="cerrarForm()">×</button></div>
