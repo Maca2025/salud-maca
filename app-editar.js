@@ -91,9 +91,49 @@ function editarSuplemento(id){
         <div class="form-grid">
           ${txt('sitio','Dónde lo compras','Amazon',s.sitio)}
           <div class="form-campo">
-            <label for="su-precio">Precio <span class="op">$</span></label>
+            <label for="su-precio">Precio del envase <span class="op">$</span></label>
             <input type="number" step="any" inputmode="decimal" id="su-precio"
               value="${s.precio==null?'':s.precio}">
+          </div>
+        </div>
+
+        <div class="form-sec">Envase y consumo</div>
+        <div class="form-grid">
+          <div class="form-campo">
+            <label for="su-unidades">Piezas por envase</label>
+            <input type="number" step="1" inputmode="numeric" id="su-unidades"
+              value="${unidadesDe(s) || ''}" placeholder="60">
+            <span class="form-hint">Cápsulas, pastillas o tomas que trae el bote.
+              Con esto y el precio sale el costo por toma y el gasto al mes.</span>
+          </div>
+          <div class="form-campo">
+            <label for="su-portoma">Piezas por toma</label>
+            <input type="number" step="1" inputmode="numeric" id="su-portoma"
+              value="${porTomaDe(s)}" placeholder="1">
+            <span class="form-hint">Cuántas te tragas cada vez que marcas la casilla.
+              Casi siempre 1.</span>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-campo">
+            <label for="su-frecuencia">Cada cuánto</label>
+            <select id="su-frecuencia">
+              <option value="diario"  ${frecuenciaDe(s)==='diario'?'selected':''}>Todos los días</option>
+              <option value="alterno" ${frecuenciaDe(s)==='alterno'?'selected':''}>Días alternos</option>
+              <option value="semanal" ${frecuenciaDe(s)==='semanal'?'selected':''}>Una vez por semana</option>
+            </select>
+          </div>
+          <div class="form-campo">
+            <label for="su-envase">Sale del envase de</label>
+            <select id="su-envase">
+              <option value="" ${envaseDe(s)===s.id?'selected':''}>— Su propio envase —</option>
+              ${SUPS.filter(x=>x.id && x.id!==s.id).map(x=>
+                `<option value="${esc(x.id)}" ${envaseDe(s)===x.id?'selected':''}>${esc(x.sustancia)}</option>`
+              ).join('')}
+            </select>
+            <span class="form-hint">Solo si dos filas comparten frasco, como el calcio
+              de la comida y el de la noche. Evita que el costo se cuente dos veces.</span>
           </div>
         </div>
 
@@ -132,9 +172,13 @@ async function guardarSuplementoForm(nuevo){
     precio: v('precio')==='' ? '' : Number(v('precio')),
     link:v('link'), slot:v('slot'), nivel:Number(v('nivel'))||0,
     beneficio:v('beneficio'), absorcion:v('absorcion'), alerta:v('alerta'),
-    // La columna `estado` puede no existir todavía en la hoja: editarDato
-    // la crea al vuelo la primera vez que se guarda.
+    // Estas columnas pueden no existir todavía en la hoja: editarDato las
+    // crea al vuelo la primera vez que se guarda una.
     estado:v('estado'),
+    unidades: v('unidades')==='' ? '' : Number(v('unidades')),
+    por_toma: v('portoma')==='' ? '' : Number(v('portoma')),
+    frecuencia: v('frecuencia'),
+    envase_de: v('envase'),
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';

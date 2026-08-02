@@ -46,6 +46,53 @@ function fondoClick(ev, el){
   if(ev.target === el && empezoFuera) cerrarForm();
 }
 
+/* ────────────────────────────────────────────────────────────
+   ENVASE Y CONSUMO
+   Cuatro campos que la hoja puede o no tener todavía; `editarDato`
+   crea la columna la primera vez que se guarda uno.
+
+     unidades   piezas que trae el envase
+     por_toma   piezas que te tragas cada vez que marcas la casilla
+     frecuencia diario / alterno / semanal
+     envase_de  id de la fila de la que sale el frasco
+
+   `envase_de` es el que evita contar dos veces: `calcio` y `calcio_noche`
+   son filas separadas porque van a horas distintas — esa separación es la
+   que protege al hierro — pero salen del mismo bote. Sin este campo, al
+   ponerle precio a las dos el total se duplica solo.
+
+   Las columnas llegan de la hoja en snake_case; el cliente ha usado
+   camelCase en otras partes. Se aceptan las dos por si acaso.
+   ──────────────────────────────────────────────────────────── */
+const FACTOR_FREQ = {diario: 1, alterno: 0.5, semanal: 1/7};
+
+function campo_(s, snake, camel){
+  const v = (s && (s[snake] != null && s[snake] !== '' ? s[snake] : s[camel]));
+  return v == null ? '' : v;
+}
+function unidadesDe(s){ const n = Number(campo_(s,'unidades','unidades')); return n > 0 ? n : 0; }
+function porTomaDe(s){  const n = Number(campo_(s,'por_toma','porToma'));   return n > 0 ? n : 1; }
+function frecuenciaDe(s){
+  const f = String(campo_(s,'frecuencia','frecuencia')).trim().toLowerCase();
+  return FACTOR_FREQ[f] ? f : 'diario';
+}
+/* id de la fila que tiene el envase. Si no se declara, cada uno es el suyo. */
+function envaseDe(s){ return String(campo_(s,'envase_de','envaseDe')).trim() || (s && s.id) || ''; }
+
+/* Piezas al día que consume una fila. */
+function piezasDia(s){ return FACTOR_FREQ[frecuenciaDe(s)] * porTomaDe(s); }
+
+/* Agrupa los suplementos que comparten envase. Devuelve Map raiz -> [sups] */
+function gruposDeEnvase(lista){
+  const g = new Map();
+  (lista || []).forEach(s => {
+    const raiz = envaseDe(s);
+    if(!g.has(raiz)) g.set(raiz, []);
+    g.get(raiz).push(s);
+  });
+  return g;
+}
+
 /* Los suplementos que de verdad entran en los cálculos del día. */
 function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
 function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }

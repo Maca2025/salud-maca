@@ -25,9 +25,9 @@
 const BLOQUES_DEFAULT = [
   {id:"ayunas",   label:"Al despertar", desc:"En ayunas, 30–60 min antes de desayunar. La levotiroxina va sola: cualquier mineral reduce su absorción.", icon:"🌅", desde:"06:00", hasta:"07:00", color:"#7B5EA7"},
   {id:"desayuno", label:"Desayuno",     desc:"Con comida que contenga grasa (liposolubles). Sin hierro, zinc ni calcio, para no competir con la levotiroxina.", icon:"☀️", desde:"07:30", hasta:"08:30", color:"#E67E22"},
-  {id:"comida",   label:"Comida",       desc:"Con la comida principal. Multivitamínico y 1.ª toma de calcio: ≥4 h antes del hierro.", icon:"🌞", desde:"13:30", hasta:"14:30", color:"#2D6A4F"},
+  {id:"comida",   label:"Comida",       desc:"Con la comida principal. Multivitamínico y zinc: ≥4 h antes del hierro. El calcio ya no va aquí — compite con el zinc.", icon:"🌞", desde:"13:30", hasta:"14:30", color:"#2D6A4F"},
   {id:"tarde",    label:"Media tarde",  desc:"Lejos de comidas: hierro + vitamina C + probiótico. ≥4 h del zinc, del calcio y de la levotiroxina.", icon:"🍵", desde:"18:00", hasta:"19:00", color:"#B9770E"},
-  {id:"noche",    label:"Noche",        desc:"30–60 min antes de dormir. 2.ª toma de calcio: por eso empieza a las 22:00 y no a las 21:00, para dejar ≥4 h desde el hierro.", icon:"🌙", desde:"22:00", hasta:"23:00", color:"#2471A3"},
+  {id:"noche",    label:"Noche",        desc:"30–60 min antes de dormir. Aquí va el calcio, en toma única: el bloque empieza a las 22:00 y no a las 21:00 para dejar ≥4 h desde el hierro de la tarde.", icon:"🌙", desde:"22:00", hasta:"23:00", color:"#2471A3"},
 ];
 
 /* Estado vivo, hidratado desde localStorage por loadSupsConfig() */

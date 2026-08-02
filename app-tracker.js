@@ -502,9 +502,11 @@ function renderProtocolo() {
 }
 
 /* ── Costo estimado del protocolo ──────────────────────────
-   Usa la columna `precio` de la hoja. Si además hay `unidades`
-   (piezas por envase) y `porDia`, calcula el costo mensual real;
-   si no, informa solo el total de reposición.
+   `precio` es el del ENVASE. Con `unidades` (piezas que trae),
+   `por_toma` y `frecuencia` sale el costo por pieza y el gasto al mes.
+   `envase_de` agrupa las filas que comparten frasco, para no pagar
+   dos veces el mismo bote ni subestimar lo rápido que se vacía.
+   Todo se edita desde la app; ya no hace falta tocar la hoja.
    ──────────────────────────────────────────────────────────── */
 function renderCostos(){
   const cont = document.getElementById('sups-costo');
@@ -517,25 +519,46 @@ function renderCostos(){
   const porComprar = SUPS.filter(supPorComprar);
   if(!conPrecio.length){ cont.innerHTML = ''; return; }
 
-  const totalEnvases = conPrecio.reduce((t,s) => t + Number(s.precio), 0);
+  // El precio vive en la fila que tiene el envase. Si dos filas comparten
+  // frasco (calcio y calcio_noche), solo la raíz cuenta para "reponer todo":
+  // si no, un mismo bote se pagaría dos veces.
+  const grupos = gruposDeEnvase(enJuego);
+  let totalEnvases = 0, mensual = 0, conDatos = 0, gruposConPrecio = 0;
 
-  // Costo mensual sólo si la hoja trae unidades y dosis diaria
-  let mensual = 0, conDatos = 0;
-  conPrecio.forEach(s=>{
-    const u  = Number(s.unidades), pd = Number(s.porDia);
-    if(u > 0 && pd > 0){ mensual += (Number(s.precio)/u) * pd * 30; conDatos++; }
+  grupos.forEach((filas, raizId) => {
+    const raiz = filas.find(x => x.id === raizId) || filas[0];
+    const precio = Number(raiz.precio);
+    if(!(precio > 0)) return;
+    gruposConPrecio++;
+    totalEnvases += precio;
+
+    // Piezas al día que se llevan de ESE envase, sumando todas sus filas
+    const u = unidadesDe(raiz);
+    const diarias = filas.reduce((t,x) => t + piezasDia(x), 0);
+    if(u > 0 && diarias > 0){
+      mensual += (precio / u) * diarias * 30;
+      conDatos++;
+    }
   });
 
   const fmt = n => '$' + Math.round(n).toLocaleString('es-MX');
   const caros = [...conPrecio].sort((a,b)=>Number(b.precio)-Number(a.precio)).slice(0,3);
   const sinPrecio = enJuego.length - conPrecio.length;
 
+  // A cuántos les falta el dato de piezas por envase para poder calcular
+  const faltanUnidades = [];
+  grupos.forEach((filas, raizId) => {
+    const raiz = filas.find(x => x.id === raizId) || filas[0];
+    if(Number(raiz.precio) > 0 && !unidadesDe(raiz)) faltanUnidades.push(raiz.sustancia);
+  });
+
   cont.innerHTML = `
     <div class="costo-box">
       <div class="costo-head">💰 Costo del protocolo</div>
       <div class="costo-grid">
         <div class="costo-stat"><strong>${fmt(totalEnvases)}</strong><span>reponer todo</span></div>
-        ${conDatos ? `<div class="costo-stat"><strong>${fmt(mensual)}</strong><span>al mes (${conDatos} de ${conPrecio.length})</span></div>` : ''}
+        ${conDatos ? `<div class="costo-stat"><strong>${fmt(mensual)}</strong>
+          <span>al mes${conDatos<gruposConPrecio?` · ${conDatos} de ${gruposConPrecio}`:''}</span></div>` : ''}
         <div class="costo-stat"><strong>${conPrecio.length}</strong><span>con precio${sinPrecio?` · ${sinPrecio} sin`:''}</span></div>
       </div>
       <div class="costo-top">Los tres más caros:
@@ -543,14 +566,14 @@ function renderCostos(){
       </div>
       ${sinPrecio ? `<div class="costo-aviso">⚠️ <strong>${sinPrecio} de ${enJuego.length}</strong> no tienen precio,
         así que el total va corto. Se ponen en Protocolo → Editar.</div>` : ''}
+      ${faltanUnidades.length ? `<div class="costo-nota">
+        Para el gasto mensual falta saber cuántas piezas trae el envase de:
+        <strong>${faltanUnidades.map(esc).join(' · ')}</strong>.
+        Se pone en Protocolo → Editar → <em>Piezas por envase</em>.
+      </div>` : ''}
       ${porComprar.length ? `<div class="costo-nota">
         ${porComprar.length} pendiente${porComprar.length>1?'s':''} de comprar, fuera de este total:
         ${porComprar.map(s=>esc(s.sustancia)).join(' · ')}.
-      </div>` : ''}
-      ${conDatos < conPrecio.length ? `<div class="costo-nota">
-        Para estimar el gasto mensual completo, agrega en la hoja
-        <em>Protocolo Suplementos</em> las columnas <code>unidades</code>
-        (piezas por envase) y <code>porDia</code> (cuántas tomas al día).
       </div>` : ''}
     </div>`;
 }
