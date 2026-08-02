@@ -232,6 +232,7 @@ function renderHorario() {
   attachDnD();
   renderPendientes();
   renderConflictos();
+  renderAvisoStock();
 }
 
 function toggleTracker(id, cb) {
@@ -576,6 +577,121 @@ function renderCostos(){
         ${porComprar.map(s=>esc(s.sustancia)).join(' · ')}.
       </div>` : ''}
     </div>`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   INVENTARIO — LA TARJETA DE PROTOCOLO
+
+   El número grande son los DÍAS que quedan, no las piezas: las
+   piezas las contaste tú y ya las sabes; los días son los que te
+   dicen si hay que salir a comprar.
+
+   El cálculo descuenta por lo REGISTRADO. Un día que tomaste sin
+   marcar no se descuenta, así que el número va optimista — siempre
+   en la dirección de "tranquila, te queda de sobra", que es la peor.
+   Por eso cada fila avisa cuando es aproximado en vez de callarse.
+   ════════════════════════════════════════════════════════════ */
+function renderStock(){
+  const cont = document.getElementById('sups-stock');
+  if(!cont) return;
+
+  const filas      = inventario();
+  const porComprar = SUPS.filter(supPorComprar);
+  const cab = `<div class="inv-head">
+      <span>📦 Inventario</span>
+      <button class="inv-btn" onclick="abrirInventario()">Hacer inventario</button>
+    </div>`;
+  const notaCompra = porComprar.length ? `<div class="inv-nota">
+      ${porComprar.length === 1 ? 'Uno está' : porComprar.length + ' están'} marcados por comprar
+      y no salen aquí: ${porComprar.map(s => esc(s.sustancia || s.id)).join(' · ')}.
+    </div>` : '';
+
+  if(!filas.length){ cont.innerHTML = ''; return; }
+
+  const contados  = filas.filter(f => !f.sinContar);
+  const sinContar = filas.filter(f =>  f.sinContar);
+
+  if(!contados.length){
+    cont.innerHTML = `<div class="inv-box">${cab}
+      <div class="inv-vacio">Todavía no has contado ningún envase. Dale a
+        <strong>Hacer inventario</strong> y apunta lo que tengas: lo que dejes en
+        blanco simplemente no se calcula.</div>${notaCompra}</div>`;
+    return;
+  }
+
+  // Sin el historial cargado, el consumo sale cero y todos los botes
+  // parecerían llenos. Decirlo es mejor que enseñar el número malo.
+  const esperando = !_histListo;
+
+  const urgentes = contados.filter(f => f.nivel === 'rojo' || f.nivel === 'caducado');
+  const hayAprox = contados.some(f => f.stock && (f.stock.estimado || f.stock.cobertura < 70));
+
+  cont.innerHTML = `<div class="inv-box">${cab}
+    ${esperando ? `<div class="inv-espera">⏳ Cargando tu historial para calcular el consumo.
+      Hasta que llegue, los días que ves se quedan cortos de descontar.</div>` : ''}
+    ${urgentes.length ? `<div class="inv-urgente">🛒 Toca reponer:
+      <strong>${urgentes.map(f => esc(f.nombre)).join(' · ')}</strong></div>` : ''}
+    <div class="inv-lista">${contados.map(filaInv_).join('')}</div>
+    ${sinContar.length ? `<div class="inv-nota">Sin contar todavía:
+      <strong>${sinContar.map(f => esc(f.nombre)).join(' · ')}</strong>.</div>` : ''}
+    ${hayAprox ? `<div class="inv-nota">Las filas marcadas <em>aproximado</em> son las que llevan
+      poco tiempo desde el conteo o tienen días sin registrar: ahí el número va optimista,
+      porque un día que tomaste sin marcar no se descuenta.</div>` : ''}
+    ${notaCompra}
+  </div>`;
+}
+
+function filaInv_(f){
+  const st      = f.stock;
+  const aprox   = st.estimado || st.cobertura < 70;
+  const d       = f.dias;
+  const vencido = f.diasCad != null && f.diasCad < 0;
+  // Cuando el consumo registrado va corto, el número grande se infla.
+  // Enseñar también el conservador es más útil que esconder cualquiera
+  // de los dos: la diferencia son justo los días que no marcaste.
+  const conserv = (aprox && f.diasDecl != null && f.diasDecl < d)
+    ? ` · si no te saltas ninguno, ${f.diasDecl} ${f.diasDecl === 1 ? 'día' : 'días'}` : '';
+  const cad   = f.caducidad ? (
+      f.diasCad <  0 ? `<span class="inv-cad vencida">🔴 caducó hace ${-f.diasCad} ${-f.diasCad === 1 ? 'día' : 'días'}</span>`
+    : f.diasCad <= 60 ? `<span class="inv-cad pronto">⏳ caduca en ${f.diasCad} ${f.diasCad === 1 ? 'día' : 'días'}</span>`
+    :                   `<span class="inv-cad">caduca el ${fechaInv(f.caducidad)}</span>`) : '';
+
+  return `<div class="inv-fila nivel-${f.nivel}">
+    <div class="inv-dias">
+      ${vencido
+        ? `<strong>✕</strong><span>caducado</span>`
+        : `<strong>${d == null ? '—' : d}</strong>
+           <span>${d == null ? 'sin ritmo' : (d === 1 ? 'día' : 'días')}</span>`}
+    </div>
+    <div class="inv-datos">
+      <div class="inv-nombre">${esc(f.nombre)}${f.acompanan.length
+        ? ` <span class="inv-comparte">+ ${f.acompanan.map(esc).join(' + ')}, mismo envase</span>` : ''}</div>
+      <div class="inv-sub">${st.restantes}${f.total ? ' de ' + f.total : ''}
+        ${unidadTexto(f.raiz, st.restantes)} · contado el ${fechaInv(f.contado)}${
+        aprox ? ' · <em>aproximado</em>' : ''}${conserv}</div>
+      ${cad ? `<div class="inv-cadline">${cad}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+/* La franja del tracker. A las seis de la mañana no debe estorbar:
+   si no hay nada urgente, no aparece nada. */
+function renderAvisoStock(){
+  const cont = document.getElementById('aviso-stock');
+  if(!cont) return;
+  if(fechaActiva !== hoyISO()){ cont.innerHTML = ''; return; }
+
+  const filas = inventario().filter(f =>
+    f.nivel === 'rojo' || f.nivel === 'ambar' || f.nivel === 'caducado');
+  if(!filas.length){ cont.innerHTML = ''; return; }
+
+  cont.innerHTML = `<div class="inv-aviso">${filas.map(f => {
+    if(f.diasCad != null && f.diasCad < 0)
+      return `<span class="inv-avchip vencida">🔴 ${esc(f.nombre)} caducó</span>`;
+    if(f.dias != null && f.dias < 14)
+      return `<span class="inv-avchip ${f.dias < 7 ? 'rojo' : ''}">📦 ${esc(f.nombre)} · ${f.dias} ${f.dias === 1 ? 'día' : 'días'}</span>`;
+    return `<span class="inv-avchip">⏳ ${esc(f.nombre)} caduca en ${f.diasCad} días</span>`;
+  }).join('')}</div>`;
 }
 
 /* Etiqueta de cada interacción según si el horario la resuelve.

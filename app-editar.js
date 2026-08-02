@@ -200,6 +200,139 @@ function envaseNuevo(){
   if(msg){ msg.className='form-msg info'; msg.textContent='Envase nuevo. Dale a Guardar para que quede.'; }
 }
 
+/* ════════════════════════════════════════════════════════════
+   HACER INVENTARIO — CONTAR TODO DE UNA SENTADA
+
+   El campo de "quedan" nace VACÍO a propósito, con lo que hay
+   guardado como pista en gris. Así no hay ambigüedad: lo que
+   escribes es un conteo nuevo, lo que dejas en blanco no se toca.
+   Si viniera relleno con el número anterior no habría forma de
+   distinguir "conté y son las mismas" de "no lo conté".
+
+   La fecha del control es UNA para todo lo que cuentes ahora.
+   ════════════════════════════════════════════════════════════ */
+let _invFilas = [];
+
+function abrirInventario(){
+  _invFilas = inventario();
+  if(!_invFilas.length){ alert('No hay suplementos activos que contar.'); return; }
+
+  const fila = f => {
+    const u  = unidadTexto(f.raiz, 2);
+    const st = f.stock;
+    const pista = st
+      ? `el cálculo dice ${st.restantes}${st.estimado || st.cobertura < 70 ? ' (aproximado)' : ''}`
+      : 'nunca contado';
+    return `
+    <div class="inv-row">
+      <div class="inv-row-nom">${esc(f.nombre)}
+        ${f.raiz.nombre ? `<span class="inv-row-marca">${esc(f.raiz.nombre)}</span>` : ''}
+        ${f.acompanan.length ? `<span class="inv-row-marca">+ ${f.acompanan.map(esc).join(' + ')}</span>` : ''}
+      </div>
+      <div class="inv-row-campos">
+        <div class="form-campo">
+          <label for="inv-ex-${f.id}">Quedan <span class="op">${u}</span></label>
+          <input type="number" step="any" min="0" inputmode="decimal" id="inv-ex-${f.id}"
+            placeholder="${st ? st.restantes : ''}">
+        </div>
+        <div class="form-campo">
+          <label for="inv-cad-${f.id}">Caduca</label>
+          <input type="date" id="inv-cad-${f.id}" value="${f.caducidad}"
+            data-orig="${f.caducidad}">
+        </div>
+      </div>
+      <div class="inv-row-pista">${pista}${f.total
+        ? ` · <button type="button" class="inv-lleno" onclick="invLleno('${esc(f.id)}',${f.total})">envase nuevo: ${f.total}</button>`
+        : ''}</div>
+    </div>`;
+  };
+
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal">
+      <div class="blk-modal-hdr"><span>📦 Hacer inventario</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        <div id="inv-msg" class="form-msg info">
+          Cuenta lo que tengas y escríbelo. <strong>Lo que dejes en blanco no se toca</strong>,
+          así que puedes contar tres hoy y el resto otro día.
+        </div>
+
+        <div class="form-campo">
+          <label for="inv-fecha">Fecha del control</label>
+          <input type="date" id="inv-fecha" value="${hoyISO()}" max="${hoyISO()}">
+          <span class="form-hint">Se aplica a todo lo que cuentes ahora. Es desde esta fecha
+            desde cuando se empieza a descontar el consumo.</span>
+        </div>
+
+        <div class="inv-rows">${_invFilas.map(fila).join('')}</div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Cancelar</button>
+        <button class="blk-btn primary" id="inv-guardar" onclick="guardarInventario()">Guardar inventario</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Abriste uno sin empezar: el conteo es lo que trae el envase. */
+function invLleno(id, total){
+  const e = document.getElementById('inv-ex-' + id);
+  if(e){ e.value = total; e.focus(); }
+}
+
+async function guardarInventario(){
+  const msg   = document.getElementById('inv-msg');
+  const btn   = document.getElementById('inv-guardar');
+  const fecha = document.getElementById('inv-fecha').value.trim();
+  const fallo = t => { msg.className = 'form-msg err'; msg.textContent = t; };
+
+  if(!RE_FECHA.test(fecha)){ fallo('Ponle una fecha al control.'); return; }
+
+  // Solo lo que de verdad cambió: contar tres envases son tres
+  // llamadas, no diecinueve.
+  const pend = [];
+  _invFilas.forEach(f => {
+    const ex = document.getElementById('inv-ex-'  + f.id);
+    const cd = document.getElementById('inv-cad-' + f.id);
+    const datos = {};
+    if(ex && ex.value.trim() !== ''){
+      datos.existencias = Number(ex.value);
+      datos.fecha_stock = fecha;
+    }
+    if(cd && cd.value !== cd.dataset.orig) datos.caducidad = cd.value;
+    if(Object.keys(datos).length) pend.push({f, datos});
+  });
+
+  if(!pend.length){ fallo('No cambiaste nada. Escribe al menos un conteo.'); return; }
+
+  btn.disabled = true;
+  const fallidos = [];
+  for(let i = 0; i < pend.length; i++){
+    const {f, datos} = pend[i];
+    btn.textContent = `Guardando ${i+1} de ${pend.length}…`;
+    try {
+      await api({action:'editarDato', tabla:'suplementos', clave:f.id,
+                 datos: JSON.stringify(datos)});
+      const s = SUPS.find(x => x.id === f.id);
+      if(s) Object.assign(s, datos);
+    } catch(e){
+      // Que falle uno no debe tirar los demás: lo ya guardado se queda.
+      fallidos.push(f.nombre);
+    }
+  }
+
+  renderProtocolo(); renderCostos(); renderStock(); renderAvisoStock();
+
+  if(fallidos.length){
+    btn.disabled = false; btn.textContent = 'Reintentar los que faltan';
+    fallo(`Se guardaron ${pend.length - fallidos.length} de ${pend.length}. ` +
+          `No se pudo con: ${fallidos.join(' · ')}. Los demás ya quedaron.`);
+    return;
+  }
+  cerrarForm();
+}
+
 async function guardarSuplementoForm(nuevo){
   const msg = document.getElementById('su-msg');
   const btn = document.getElementById('su-guardar');
@@ -238,7 +371,7 @@ async function guardarSuplementoForm(nuevo){
     if(i>=0) SUPS[i] = obj; else SUPS.push(obj);
     normalizeLayout(); saveSupsConfig();
     cerrarForm();
-    renderHorario(); renderProtocolo(); renderCostos();
+    renderHorario(); renderProtocolo(); renderCostos(); renderStock();
   } catch(e){
     msg.className='form-msg err'; msg.textContent = e.message;
     btn.disabled = false; btn.textContent = 'Guardar';
@@ -258,7 +391,7 @@ async function borrarSuplemento(id){
     delete trackerState[id];
     normalizeLayout(); saveSupsConfig();
     cerrarForm();
-    renderHorario(); renderProtocolo(); renderCostos();
+    renderHorario(); renderProtocolo(); renderCostos(); renderStock();
   } catch(e){
     alert('No se pudo borrar: ' + e.message);
   }
@@ -465,6 +598,7 @@ function initSuplementos() {
   renderHorario();
   renderProtocolo();
   renderCostos();
+  renderStock();
   renderInteracciones();
   const inp = document.getElementById('dia-input');
   if(inp){ inp.value = fechaActiva; inp.max = hoyISO(); }
@@ -472,6 +606,12 @@ function initSuplementos() {
 }
 
 let _regEntries = [];
+
+/* Un array vacío es truthy y `_regEntries` nace como `[]`, así que no
+   sirve para saber si el historial ya llegó. Sin este flag el
+   inventario calcularía cero consumo y diría que todos los botes
+   están llenos — un error silencioso y en la dirección peor. */
+let _histListo = false;
 
 function switchRegView(v) {
   ['calendario','historial','adherencia'].forEach(k=>{

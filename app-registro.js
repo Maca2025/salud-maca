@@ -323,10 +323,16 @@ async function cargarRegistro() {
     if(!entries.length){
       container.innerHTML = '<p class="reg-status">No hay días registrados aún.</p>';
       if(adh) adh.innerHTML = '<p class="reg-status">Sin datos todavía.</p>';
+      // Un historial vacío también es una respuesta: el inventario tiene
+      // que dejar de esperarla y enseñar lo que pueda.
+      _histListo = true; renderStock(); renderAvisoStock();
       return;
     }
     entries.sort((a,b)=>(b.fechaISO+' '+(b.hora||'')).localeCompare(a.fechaISO+' '+(a.hora||'')));
     _regEntries = entries;
+    // El inventario descuenta el consumo de aquí, y hasta ahora este
+    // historial solo lo cargaba la pestaña de Registro.
+    _histListo = true; renderStock(); renderAvisoStock();
     if(status) status.textContent = entries.length+' día(s)';
     renderHistorial(entries);
     renderAdherencia(entries);
