@@ -569,7 +569,7 @@ function posEnEscala(v, tope){
   return Math.max(1, Math.min(99, +(v / tope * 100).toFixed(1)));
 }
 
-function tarjetaProteina(prot, obj, peso, pa, pv){
+function tarjetaProteina(prot, obj, peso, pa, pv, dias){
   if(!obj){
     return `<div class="pc-card">
       <div class="pc-label">Proteina al dia</div>
@@ -584,7 +584,7 @@ function tarjetaProteina(prot, obj, peso, pa, pv){
   const gxkg = peso ? (prot/peso).toFixed(2) : null;
   return `
   <div class="pc-card">
-    <div class="pc-label">Proteina al dia <span class="pc-sub">&middot; suelo ${obj.min} g</span></div>
+    <div class="pc-label">Proteina al dia <span class="pc-sub">&middot; promedio ${dias} ${dias===1?'dia':'dias'} &middot; suelo ${obj.min} g</span></div>
     <div class="pc-fila">
       <span class="pc-num">${prot}</span><span class="pc-uni">g</span>
       <span class="pc-chip ${estado}">${chip}</span>
@@ -600,17 +600,15 @@ function tarjetaProteina(prot, obj, peso, pa, pv){
   </div>`;
 }
 
-function tarjetaAgua(agua){
+function tarjetaAgua(agua, dias){
   const meta = metaAguaMl();
-  const vasos = Math.round(agua / (typeof VASO_ML === 'number' ? VASO_ML : 250));
-  const total = (typeof VASOS_DIA === 'number' ? VASOS_DIA : 8);
   const estado = agua < meta*0.5 ? 'mal' : (agua < meta ? 'ojo' : 'bien');
-  const faltan = Math.max(0, total - vasos);
+  const falta = Math.max(0, meta - agua);
   const chip = agua >= meta ? 'meta cubierta'
-             : `faltan ${faltan} ${faltan===1?'vaso':'vasos'}`;
+             : `${(falta/1000).toFixed(1)} L por debajo`;
   return `
   <div class="pc-card">
-    <div class="pc-label">Agua al dia <span class="pc-sub">&middot; meta ${(meta/1000).toFixed(1)} L</span></div>
+    <div class="pc-label">Agua al dia <span class="pc-sub">&middot; promedio ${dias} ${dias===1?'dia':'dias'} &middot; meta ${(meta/1000).toFixed(1)} L</span></div>
     <div class="pc-fila">
       <span class="pc-num">${(agua/1000).toFixed(1)}</span><span class="pc-uni">L</span>
       <span class="pc-chip ${estado}">${chip}</span>
@@ -621,22 +619,24 @@ function tarjetaAgua(agua){
       <i class="t-bien" style="flex:25"></i>
       <b style="left:${posEnEscala(agua, meta*1.25)}%"></b>
     </div>
-    <div class="pc-pie">${vasos} de ${total} vasos &middot; se guarda sola al tocar un vaso</div>
+    <div class="pc-pie">Los vasos de hoy se cuentan arriba, en el registro del dia.</div>
   </div>`;
 }
 
-/* La frase de arriba: la respuesta a "voy bien hoy" antes de pedirle nada. */
-function lineaIngesta(prot, obj, agua){
-  const partes = [];
-  if(obj){
-    partes.push(prot < obj.min
-      ? `te faltan ${obj.min - prot} g de proteina para tu suelo de ${obj.min}`
-      : `proteina en rango (${obj.min}\u2013${obj.max} g)`);
-  }
+/* La frase de arriba habla de HOY. Las tarjetas de abajo son el promedio de
+   varios dias: mezclar los dos periodos sin decirlo fue justo lo que confundio
+   (un vaso marcado hoy contra "1.2 L" del promedio). Cada numero dice su
+   periodo, y el accionable es el de hoy. */
+function lineaIngesta(obj){
+  const th = (typeof totalesHoy === 'function') ? totalesHoy() : null;
+  const protHoy = th ? (th.pa + th.pv) : 0;
+  const aguaHoy = aguaLog();
   const meta = metaAguaMl();
-  partes.push(agua >= meta ? 'agua cubierta'
-            : `agua ${(agua/1000).toFixed(1)} de ${(meta/1000).toFixed(1)} L`);
-  return partes.join(' \u00b7 ');
+  const izq = `Hoy llevas ${protHoy} g de proteina y ${(aguaHoy/1000).toFixed(2)} L de agua`;
+  const der = obj
+    ? `tu suelo son ${obj.min} g y ${(meta/1000).toFixed(1)} L al dia`
+    : `la meta de agua son ${(meta/1000).toFixed(1)} L al dia`;
+  return `${izq} \u00b7 ${der}`;
 }
 
 function renderIngestaResumen(){
@@ -665,8 +665,8 @@ function renderIngestaResumen(){
 
   cont.innerHTML = `
     <div style="font-size:.86rem;color:#1b4332;font-weight:700;line-height:1.5;
-                margin:0 0 11px">${lineaIngesta(prot, obj, agua)}</div>
-    <div class="pc-grid">${tarjetaProteina(prot, obj, peso, pa, pv)}${tarjetaAgua(agua)}</div>
+                margin:0 0 11px">${lineaIngesta(obj)}</div>
+    <div class="pc-grid">${tarjetaProteina(prot, obj, peso, pa, pv, ult7.length)}${tarjetaAgua(agua, ult7.length)}</div>
     ${crea}
     <div class="ing-nota">Promedios de los ultimos ${ult7.length} dias registrados.</div>`;
 }
