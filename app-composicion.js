@@ -149,7 +149,7 @@ function renderProgress() {
 
   // ── Lo que de verdad importa: grasa fuera, músculo dentro ──
   const grasaIni = first.grasa, grasaAct = last.grasa;
-  const grasaMeta = (OBJ.grasa != null) ? OBJ.grasa : 15;
+  const grasaMeta = grasaMetaKg();
   const grasaFuera = +(grasaIni - grasaAct).toFixed(1);
   const grasaFalta = +(grasaAct - grasaMeta).toFixed(1);
   const rangoGrasa = grasaIni - grasaMeta;
@@ -186,38 +186,12 @@ function renderProgress() {
 
   document.getElementById('progressWidget').innerHTML=`
     <div class="progress-widget">
-      <h4>🎯 Progreso hacia ${grasaMeta} kg de grasa</h4>
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" style="width:${pctGrasa}%"></div>
-      </div>
-      <div class="progress-labels">
-        <span>Inicio: ${grasaIni} kg de grasa</span>
-        <span style="color:#2d6a4f;font-weight:700">${pctGrasa}% completado</span>
-        <span>Meta: ${grasaMeta} kg</span>
-      </div>
-
-      <div class="prog-destacado">
-        <div class="prog-big">
-          <strong>−${grasaFuera} kg</strong>
-          <span>de grasa fuera</span>
-        </div>
-        <div class="prog-big ${musculo>=0?'bueno':'ojo'}">
-          <strong>${musculo>=0?'+':''}${musculo} kg</strong>
-          <span>de músculo</span>
-        </div>
-        ${calidad!=null ? `<div class="prog-big">
-          <strong>${calidad}%</strong>
-          <span>de lo perdido fue grasa</span>
-        </div>` : ''}
-      </div>
-
+      <h4>Proyección por ritmo de grasa</h4>
       <div class="progress-stats">
         <div class="progress-stat"><strong>${grasaFalta} kg</strong><br>de grasa por perder</div>
-        <div class="progress-stat"><strong>${ritmoGrasa.toFixed(2)} kg/sem</strong><br>ritmo de grasa</div>
-        <div class="progress-stat highlight"><strong>${metaStr}</strong><br>estimado por grasa</div>
-        ${pesoEnMeta!=null ? `<div class="progress-stat"><strong>~${pesoEnMeta} kg</strong><br>peso si conservas músculo</div>` : ''}
+        <div class="progress-stat"><strong>${ritmoGrasa.toFixed(2)} kg/sem</strong><br>ritmo reciente</div>
+        <div class="progress-stat highlight"><strong>${metaStr}</strong><br>si el ritmo se mantiene</div>
       </div>
-
       ${(acelerando || musculoSube) ? `
       <div class="prog-insight bueno">
         <strong>Lo que la báscula no te dice</strong>
@@ -241,10 +215,10 @@ function renderProgress() {
 
       ${tarjetaMasaMagra()}
 
-      <div class="progress-caveat">La fecha asume que el ritmo actual de pérdida de grasa se mantiene.
-      ${pesoEnMeta!=null && OBJ.peso ? `Ojo: llegar a ${grasaMeta} kg de grasa conservando tu músculo
-      te dejaría cerca de <strong>${pesoEnMeta} kg</strong>, no de ${OBJ.peso} kg — bajar de ahí
-      implicaría perder músculo.` : ''}</div>
+      <div class="progress-caveat">La fecha asume que el ritmo actual de pérdida
+      de grasa se mantiene. El peso al que llegues depende de cuánta masa magra conserves:
+      con el suelo de ${sueloMlg()} kg y la meta de ${metaPbf()} % de grasa, aterrizarías
+      cerca de <strong>${(sueloMlg() + grasaMetaKg()).toFixed(1)} kg</strong>.</div>
     </div>`;
 }
 
@@ -319,33 +293,145 @@ function initRecomposicion(){
     </table></div>`;
 }
 
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PORTADA — dos números, no seis
+   ---------------------------------------------------------------
+   Las cuatro tarjetas de minerales, proteínas, ICF y ECF tenían
+   "meta" y pedían BAJARLAS. Esas metas eran los valores de marzo
+   copiados en la fila OBJETIVO, y proteínas y minerales son masa
+   magra: justo lo que no se quiere perder. Se van al detalle.
+
+   Quedan las dos cosas sobre las que se puede actuar:
+     · grasa, con meta de porcentaje
+     · masa magra, con un SUELO que no se cruza
+
+   El peso baja a una línea de contexto. No es objetivo: es
+   consecuencia de las otras dos.
+   ═══════════════════════════════════════════════════════════════ */
+const PBF_META_DEF  = 30;   // % de grasa objetivo, si la hoja no lo trae
+const MLG_SUELO_DEF = 47;   // kg de masa magra que no bajar
+const MLG_MARGEN    = 3;    // kg por encima del suelo donde ya se avisa
+
+function metaPbf(){
+  return (typeof OBJ === 'object' && OBJ && OBJ.pbf > 0) ? OBJ.pbf : PBF_META_DEF;
+}
+function sueloMlg(){
+  return (typeof SUELO === 'object' && SUELO && SUELO.mlg > 0) ? SUELO.mlg : MLG_SUELO_DEF;
+}
+
+/* Los kg de grasa que corresponden a la meta de porcentaje, anclados
+   al suelo de masa magra: es el punto donde las dos metas se cumplen
+   a la vez. Con suelo 47 y meta 30 %, son 20.1 kg de grasa y 67.1 de peso. */
+function grasaMetaKg(){
+  const p = metaPbf();
+  return +(sueloMlg() * p / (100 - p)).toFixed(1);
+}
+
+function tarjetaGrasa(){
+  const first = DATA[0], last = DATA[DATA.length-1];
+  const meta  = grasaMetaKg();
+  const fuera = +(first.grasa - last.grasa).toFixed(1);
+  const rango = first.grasa - meta;
+  const pct   = rango > 0 ? Math.max(0, Math.min(100, Math.round(fuera/rango*100))) : 0;
+  const enMeta = last.pbf <= metaPbf();
+
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Grasa corporal</div>
+    <div class="pc-fila">
+      <span class="pc-num">${last.pbf.toFixed(1)}</span><span class="pc-uni">%</span>
+      <span class="pc-meta">meta ≤ ${metaPbf()} %</span>
+    </div>
+    <div class="pc-barra"><div class="pc-barra-fill" style="width:${pct}%"></div></div>
+    <div class="pc-pie">${last.grasa.toFixed(1)} kg ·
+      <span class="pc-bien">−${fuera} kg</span> desde ${esc(first.fecha)} ·
+      ${enMeta ? 'en meta' : pct + ' % del camino'}</div>
+  </div>`;
+}
+
+function tarjetaMagra(){
+  const last  = DATA[DATA.length-1];
+  const mlg   = mlgDe(last);
+  const suelo = sueloMlg();
+  const margen = +(mlg - suelo).toFixed(1);
+  const v = variacionMagra();
+  const c = variacionMagraCorta();
+
+  // Tres tramos, no progreso: no se avanza hacia un suelo, se guarda distancia
+  const estado = margen <= 0 ? 'mal' : (margen <= MLG_MARGEN ? 'ojo' : 'bien');
+  const texto  = margen <= 0
+    ? `${Math.abs(margen)} kg por debajo`
+    : `margen ${margen} kg`;
+
+  const pie = v
+    ? `${signoKg(v.delta)} kg en ${v.dias} días · ${signoKg(v.ritmo)} kg/sem ·
+       ${v.estable ? 'estable' : 'ritmo alto'}`
+    : `hacen falta ${VENTANA_MAGRA} días entre mediciones para leerlo`;
+
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Masa magra <span class="pc-sub">· no bajar de ${suelo}</span></div>
+    <div class="pc-fila">
+      <span class="pc-num">${mlg}</span><span class="pc-uni">kg</span>
+      <span class="pc-chip ${estado}">${texto}</span>
+    </div>
+    <div class="pc-tramos">
+      <i class="t-mal"></i><i class="t-ojo"></i><i class="t-bien"></i>
+      <b style="left:${posSuelo(mlg, suelo)}%"></b>
+    </div>
+    <div class="pc-pie">${pie}${c && c.excede ? ' <span class="pc-sub">· la lectura de ' +
+      c.dias + ' días no es interpretable</span>' : ''}</div>
+  </div>`;
+}
+
+/* Sitúa el marcador en la barra de tramos. La escala va de 3 kg por
+   debajo del suelo a 6 por encima, que es el rango donde la decisión
+   cambia; fuera de ahí se pega a los extremos. */
+function posSuelo(mlg, suelo){
+  const p = (mlg - (suelo - 3)) / 9 * 100;
+  return Math.max(1, Math.min(99, +p.toFixed(1)));
+}
+
 function renderComposicionKPIs() {
-  const first=DATA[0], last=DATA[DATA.length-1];
-  function kpiCard(label,val,prev,unit,bg,clr,meta){
-    const d=val-prev, sign=d>0?'+':'';
-    let goal='';
-    if(meta!==null && meta!==undefined && !isNaN(meta)){
-      const dif = val-meta, s = dif>0?'':'+';
-      goal = `<div class="kpi-goal">
-        <div class="kpi-goal-label" style="color:${clr}99">Meta</div>
-        <div class="kpi-goal-value" style="color:${clr}">${meta.toFixed(1)}${unit}</div>
-        <div class="kpi-goal-sub" style="color:${clr}cc">Faltan bajar ${s}${dif.toFixed(1)}${unit}</div>
-      </div>`;
-    }
-    return`<div class="kpi" style="background:${bg};border-color:${clr}33">
-      <div class="kpi-main">
-        <div class="kpi-label" style="color:${clr}aa">${label}</div>
-        <div class="kpi-value" style="color:${clr}">${val}${unit}</div>
-        <span class="kpi-delta" style="color:${clr}cc">${sign}${d.toFixed(1)} vs inicio</span>
-      </div>${goal}</div>`;
-  }
-  document.getElementById('kpis').innerHTML=
-    kpiCard('Peso total',   last.peso, first.peso,' kg','#ecfdf5','#064e3b', OBJ.peso)+
-    kpiCard('Grasa corporal',last.grasa,first.grasa,' kg','#fff1f2','#9f1239', OBJ.grasa)+
-    kpiCard('Minerales',    last.min,  first.min,' kg','#fffbeb','#78350f', OBJ.min)+
-    kpiCard('Proteínas',    last.prot, first.prot,' kg','#f0fdf4','#14532d', OBJ.prot)+
-    kpiCard('ICF · Intracelular',last.icf,first.icf,' kg','#dbeafe','#1e3a8a', OBJ.icf)+
-    kpiCard('ECF · Extracelular',last.ecf,first.ecf,' kg','#eff6ff','#1d4ed8', OBJ.ecf);
+  const last = DATA[DATA.length-1], first = DATA[0];
+  if(!last || !first){ document.getElementById('kpis').innerHTML = ''; return; }
+  const h  = coefHidratacion();
+  const dl = distribucionLiquidos();
+
+  document.getElementById('kpis').innerHTML = `
+  <div class="portada">
+    <div class="pc-grid">${tarjetaGrasa()}${tarjetaMagra()}</div>
+
+    <div class="pc-peso">
+      <span>Peso <strong>${last.peso.toFixed(1)} kg</strong>
+        (${signoKg(+(last.peso - first.peso).toFixed(1))} desde ${esc(first.fecha)})</span>
+      <span class="pc-sub">contexto, no objetivo</span>
+    </div>
+
+    <div class="pc-aviso">
+      La báscula mide agua y calcula el músculo a partir de ella. Por eso la masa
+      magra se compara a ${VENTANA_MAGRA} días, no semana a semana.
+      <button class="link-btn" onclick="verDetalleHidratacion()">Ver detalle</button>
+      <div id="pc-detalle" hidden>
+        ${h ? `<div>En tus ${h.n} mediciones, el agua ha sido siempre el
+          <strong>${h.media} %</strong> de tu masa magra (${h.min}–${h.max}). Si llegas
+          menos hidratada, la báscula lo lee como músculo perdido. No es un fallo del
+          aparato: es cómo funciona el método.</div>` : ''}
+        ${dl ? `<div>Distribución de líquidos <strong>${dl.actual}</strong> —
+          ${dl.normal ? 'normal' : 'por encima de lo normal'}, referencia por debajo de
+          ${ECF_UMBRAL}. Estable en tus ${dl.n} mediciones (${dl.min}–${dl.max}).
+          Es el agua fuera de las células sobre el agua total; cuando sube, suele
+          indicar retención de líquidos. Contexto, no diagnóstico.</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function verDetalleHidratacion(){
+  const d = document.getElementById('pc-detalle');
+  if(d) d.hidden = !d.hidden;
 }
 
 function renderComposicionTables() {
@@ -396,11 +482,33 @@ function initResumen() {
   mkLine('cTMB', [ds('TMB kcal',DATA.map(d=>d.tmb),G,{fill:true})],{min:1400,max:1620});
 }
 
+/* Reparto molecular del objetivo. La fila OBJETIVO traia los valores de marzo,
+   que no eran metas de nada. Esto los deriva del suelo de masa magra usando las
+   proporciones reales de su serie, asi la barra de objetivo cuadra con las dos
+   metas nuevas en vez de contradecirlas. */
+function objetivoMolecular(){
+  const last = DATA[DATA.length-1];
+  const suelo = sueloMlg();
+  if(!last) return {ecf:0, icf:0, prot:0, min:0, grasa:grasaMetaKg()};
+  const mlg = mlgDe(last), agua = aguaDe(last);
+  const rAgua = agua/mlg, rProt = last.prot/mlg, rMin = last.min/mlg;
+  const rEcf  = last.ecf/agua;
+  const aguaObj = suelo*rAgua;
+  return {
+    ecf:  +(aguaObj*rEcf).toFixed(1),
+    icf:  +(aguaObj*(1-rEcf)).toFixed(1),
+    prot: +(suelo*rProt).toFixed(1),
+    min:  +(suelo*rMin).toFixed(1),
+    grasa: grasaMetaKg()
+  };
+}
+
 function initComposicion() {
   renderProgress();
   const n=DATA.length;
+  const MET=objetivoMolecular();
   const sl=[...DATA.map(d=>d.fecha),'🎯 Objetivo'];
-  const ga=[...DATA.map(d=>+(d.peso-d.ecf-d.icf-d.prot-d.min).toFixed(1)),OBJ.grasa];
+  const ga=[...DATA.map(d=>+(d.peso-d.ecf-d.icf-d.prot-d.min).toFixed(1)),grasaMetaKg()];
   function bgs(s,l){return[...Array(n).fill(s),l];}
   const dp={id:'dp',afterDraw(chart){
     const ctx=chart.ctx, tc=['#fff','#fff','#fff','#333','#fff'];
@@ -420,8 +528,8 @@ function initComposicion() {
       if(i===n){
         ctx.save(); ctx.font='bold 9.5px system-ui'; ctx.fillStyle='#2d6a4f';
         ctx.textAlign='center'; ctx.textBaseline='top';
-        ctx.fillText('65.0 kg',bar.x,ty+3); ctx.restore();
-        const dv=+(OBJ.peso-DATA[n-1].peso).toFixed(1);
+        ctx.fillText((sueloMlg()+grasaMetaKg()).toFixed(1)+' kg',bar.x,ty+3); ctx.restore();
+        const dv=+((sueloMlg()+grasaMetaKg())-DATA[n-1].peso).toFixed(1);
         ctx.save(); ctx.font='bold 8.5px system-ui'; ctx.fillStyle='#15803d';
         ctx.textAlign='center'; ctx.textBaseline='bottom';
         ctx.fillText(dv.toFixed(1),bar.x,bar.y-2); ctx.restore(); return;
@@ -440,10 +548,10 @@ function initComposicion() {
   if(chartReg.cStack) chartReg.cStack.destroy();
   chartReg.cStack=new Chart(document.getElementById('cStack'),{type:'bar',
     data:{labels:sl, datasets:[
-      {label:'ECF',      data:[...DATA.map(d=>d.ecf),  OBJ.ecf],  backgroundColor:bgs('#5b9bd5','#5b9bd566'),  borderColor:bgs('rgba(0,0,0,0)','#1d4ed8'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'ICF',      data:[...DATA.map(d=>d.icf),  OBJ.icf],  backgroundColor:bgs('#2471a3','#2471a366'),  borderColor:bgs('rgba(0,0,0,0)','#1e3a8a'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'Proteínas',data:[...DATA.map(d=>d.prot), OBJ.prot], backgroundColor:bgs('#52b788','#52b78866'),  borderColor:bgs('rgba(0,0,0,0)','#14532d'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'Minerales',data:[...DATA.map(d=>d.min),  OBJ.min],  backgroundColor:bgs('#f0b429','#f0b42966'),  borderColor:bgs('rgba(0,0,0,0)','#78350f'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'ECF',      data:[...DATA.map(d=>d.ecf),  MET.ecf],  backgroundColor:bgs('#5b9bd5','#5b9bd566'),  borderColor:bgs('rgba(0,0,0,0)','#1d4ed8'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'ICF',      data:[...DATA.map(d=>d.icf),  MET.icf],  backgroundColor:bgs('#2471a3','#2471a366'),  borderColor:bgs('rgba(0,0,0,0)','#1e3a8a'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'Proteínas',data:[...DATA.map(d=>d.prot), MET.prot], backgroundColor:bgs('#52b788','#52b78866'),  borderColor:bgs('rgba(0,0,0,0)','#14532d'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'Minerales',data:[...DATA.map(d=>d.min),  MET.min],  backgroundColor:bgs('#f0b429','#f0b42966'),  borderColor:bgs('rgba(0,0,0,0)','#78350f'), borderWidth:bgs(0,2), stack:'s'},
       {label:'Grasa',    data:ga,                                   backgroundColor:bgs('#e74c3c','#e74c3c66'),  borderColor:bgs('rgba(0,0,0,0)','#9f1239'), borderWidth:bgs(0,2), stack:'s'},
     ]},
     options:{responsive:true, maintainAspectRatio:false,
