@@ -84,141 +84,43 @@ function distribucionLiquidos(){
 
 function signoKg(x){ return (x >= 0 ? '+' : '') + x; }
 
-/* Tarjeta que sustituye a la lectura semanal de músculo. */
-function tarjetaMasaMagra(){
-  const last = DATA[DATA.length-1];
-  if(!last) return '';
-  const v  = variacionMagra();
-  const c  = variacionMagraCorta();
-  const h  = coefHidratacion();
-  const dl = distribucionLiquidos();
-
-  const alerta = v && !v.estable;
-  const estilo = alerta ? ' style="border-left-color:#f59e0b;background:#fffbeb"' : '';
-
-  const cuerpo = v
-    ? `<div><strong style="display:inline;font-size:inherit;text-transform:none;letter-spacing:0">
-         ${signoKg(v.delta)} kg</strong> desde ${esc(v.ref.fecha)} —
-         ${v.dias} días · ${signoKg(v.ritmo)} kg/semana.
-         ${v.estable
-            ? 'Dentro de lo esperable acompañando la pérdida de grasa.'
-            : 'Por encima del ritmo esperable. Es la señal para revisar proteína y entrenamiento de fuerza, no para bajar más rápido.'}</div>`
-    : `<div>Sin lectura interpretable todavía: hacen falta ${VENTANA_MAGRA} días
-         entre mediciones para distinguir músculo de hidratación.</div>`;
-
-  const descarte = (c && c.excede)
-    ? `<div style="color:#78350f">La comparación con la medición anterior
-         (${c.dias} días) marcaría ${signoKg(c.ritmo)} kg/semana.
-         <strong style="display:inline;font-size:inherit;text-transform:none;letter-spacing:0">Eso no es músculo</strong>
-         — el músculo no cambia tan rápido en ningún sentido. Es agua.</div>`
-    : '';
-
-  const explica = h
-    ? `<div class="progress-caveat" style="margin-top:9px">
-         <strong>Por qué esta báscula no puede medirte el músculo.</strong>
-         Mide agua, no músculo: la masa magra la calcula dividiendo el agua entre
-         un coeficiente fijo. En tus ${h.n} mediciones ese coeficiente ha sido
-         siempre <strong>${h.media} %</strong> (${h.min}–${h.max}).
-         Si llegas menos hidratada, lo lee como músculo perdido. No es un fallo
-         del aparato: es cómo funciona el método.</div>`
-    : '';
-
-  const liquidos = dl
-    ? `<div class="progress-caveat" style="margin-top:7px">
-         <strong>Distribución de líquidos — ${dl.actual}.</strong>
-         ${dl.normal ? 'Normal' : 'Por encima de lo normal'}
-         (referencia: por debajo de ${ECF_UMBRAL}).
-         Estable en tus ${dl.n} mediciones (${dl.min}–${dl.max}).
-         Es el agua fuera de las células sobre el agua total; cuando sube,
-         suele indicar retención de líquidos. Contexto, no diagnóstico.</div>`
-    : '';
-
-  return `
-      <div class="prog-insight${alerta ? '' : ' bueno'}"${estilo}>
-        <strong>Masa libre de grasa — ${mlgDe(last)} kg</strong>
-        ${cuerpo}
-        ${descarte}
-      </div>
-      ${explica}
-      ${liquidos}`;
-}
-
+/* La proyección, y nada más. Lo que vivía aquí o subió a la portada (masa
+   magra, coeficiente de hidratación, líquidos) o se quitó por contradictorio:
+   "Ejemplo reciente" celebraba intervalos de pocos días como recomposición, y
+   con la regla de los 28 días eso es agua — se desmentía con la tarjeta que
+   tenía justo debajo. */
 function renderProgress() {
-  const first=DATA[0], last=DATA[DATA.length-1];
-  if(!first || !last){ document.getElementById('progressWidget').innerHTML=''; return; }
+  const last = DATA[DATA.length-1];
+  const cont = document.getElementById('progressWidget');
+  if(!last){ cont.innerHTML=''; return; }
 
-  // ── Lo que de verdad importa: grasa fuera, músculo dentro ──
-  const grasaIni = first.grasa, grasaAct = last.grasa;
-  const grasaMeta = grasaMetaKg();
-  const grasaFuera = +(grasaIni - grasaAct).toFixed(1);
-  const grasaFalta = +(grasaAct - grasaMeta).toFixed(1);
-  const rangoGrasa = grasaIni - grasaMeta;
-  const pctGrasa = rangoGrasa>0 ? Math.max(0,Math.min(100,Math.round(grasaFuera/rangoGrasa*100))) : 0;
+  const falta = +(last.grasa - grasaMetaKg()).toFixed(1);
+  const gRec  = regresion('grasa', 6), gGlobal = regresion('grasa');
+  const ritmo = Math.abs(gRec.valida ? gRec.ratePerWeek : gGlobal.ratePerWeek);
+  const aterriza = +(sueloMlg() + grasaMetaKg()).toFixed(1);
 
-  const musculo = +(last.smm - first.smm).toFixed(1);
-  const pesoFuera = +(first.peso - last.peso).toFixed(1);
-  // Calidad: qué proporción de lo perdido fue grasa
-  const calidad = pesoFuera>0 ? Math.round(grasaFuera/pesoFuera*100) : null;
-
-  // Ritmos: global vs reciente (últimas 6 mediciones)
-  const gGlobal = regresion('grasa'), gRec = regresion('grasa', 6);
-  const mRec = regresion('smm', 6);
-  const ritmoGrasa = Math.abs(gRec.valida ? gRec.ratePerWeek : gGlobal.ratePerWeek);
-
-  // Proyección por GRASA, no por peso
-  let metaStr = 'sin estimar', pesoEnMeta = null;
-  if(ritmoGrasa > 0.01 && grasaFalta > 0){
-    const semanas = grasaFalta / ritmoGrasa;
-    const f = new Date(); f.setDate(f.getDate() + semanas*7);
-    const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    metaStr = `${MESES[f.getMonth()]}-${f.getFullYear()}`;
-    pesoEnMeta = +(last.peso - grasaFalta).toFixed(1);   // si conserva el músculo
+  if(falta <= 0){
+    cont.innerHTML = `<div class="proyeccion">Ya estás en la meta de
+      ${metaPbf()} % de grasa. A partir de aquí el objetivo es sostenerla sin
+      bajar de ${sueloMlg()} kg de masa magra.</div>`;
+    return;
+  }
+  if(!(ritmo > 0.01)){
+    cont.innerHTML = `<div class="proyeccion">Te faltan <strong>${falta} kg</strong>
+      de grasa. Sin un ritmo reciente estable no se puede proyectar una fecha.</div>`;
+    return;
   }
 
-  // Comparativa de ritmos
-  const pRec = regresion('peso', 6), pGlobal = regresion('peso');
-  const acelerando = gRec.valida && gGlobal.valida &&
-                     Math.abs(gRec.ratePerWeek) > Math.abs(gGlobal.ratePerWeek);
-  const musculoSube = mRec.valida && mRec.ratePerWeek > -0.02;
+  const f = new Date(); f.setDate(f.getDate() + falta/ritmo*7);
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-  const recomp = detectarRecomposicion();
-  const ultRecomp = recomp.length ? recomp[recomp.length-1] : null;
-
-  document.getElementById('progressWidget').innerHTML=`
-    <div class="progress-widget">
-      <h4>Proyección por ritmo de grasa</h4>
-      <div class="progress-stats">
-        <div class="progress-stat"><strong>${grasaFalta} kg</strong><br>de grasa por perder</div>
-        <div class="progress-stat"><strong>${ritmoGrasa.toFixed(2)} kg/sem</strong><br>ritmo reciente</div>
-        <div class="progress-stat highlight"><strong>${metaStr}</strong><br>si el ritmo se mantiene</div>
-      </div>
-      ${(acelerando || musculoSube) ? `
-      <div class="prog-insight bueno">
-        <strong>Lo que la báscula no te dice</strong>
-        ${acelerando ? `<div>Tu peso baja más lento que antes
-          (${Math.abs(pGlobal.ratePerWeek).toFixed(2)} → ${Math.abs(pRec.ratePerWeek).toFixed(2)} kg/sem)
-          pero la <strong>grasa se está yendo más rápido</strong>
-          (${Math.abs(gGlobal.ratePerWeek).toFixed(2)} → ${Math.abs(gRec.ratePerWeek).toFixed(2)} kg/sem).</div>` : ''}
-        ${musculoSube ? `<div>El músculo dejó de bajar${mRec.ratePerWeek>0?' y está subiendo':''} —
-          justo lo que se busca en una recomposición.</div>` : ''}
-      </div>` : ''}
-
-      ${ultRecomp ? `
-      <div class="prog-insight">
-        <strong>Ejemplo reciente</strong>
-        <div>Entre <strong>${esc(ultRecomp.de)}</strong> y <strong>${esc(ultRecomp.a)}</strong> la báscula
-        marcó ${ultRecomp.dP>=0?'+':''}${ultRecomp.dP} kg,
-        pero perdiste ${Math.abs(ultRecomp.dG)} kg de grasa
-        ${ultRecomp.dS>=0?`y ganaste ${ultRecomp.dS} kg de músculo`:''}.
-        ${recomp.length>1?`<button class="link-btn" onclick="switchCompTab('recomposicion',document.querySelector('#comp-tab-nav .tab-btn[data-tab=recomposicion]'))">Ver los ${recomp.length} periodos →</button>`:''}</div>
-      </div>` : ''}
-
-      ${tarjetaMasaMagra()}
-
-      <div class="progress-caveat">La fecha asume que el ritmo actual de pérdida
-      de grasa se mantiene. El peso al que llegues depende de cuánta masa magra conserves:
-      con el suelo de ${sueloMlg()} kg y la meta de ${metaPbf()} % de grasa, aterrizarías
-      cerca de <strong>${(sueloMlg() + grasaMetaKg()).toFixed(1)} kg</strong>.</div>
+  cont.innerHTML = `
+    <div class="proyeccion">
+      Te faltan <strong>${falta} kg</strong> de grasa. Al ritmo de las últimas
+      semanas (<strong>${ritmo.toFixed(2)} kg/sem</strong>) llegarías por
+      <strong>${MESES[f.getMonth()]}-${f.getFullYear()}</strong>, cerca de
+      <strong>${aterriza} kg</strong> de peso.
+      <span class="pc-sub">La fecha asume que ese ritmo se mantiene.</span>
     </div>`;
 }
 
