@@ -241,6 +241,33 @@ function regresion(campo, desde){
 /* Intervalos donde el peso engañó: se movió poco o subió,
    pero la composición mejoró. */
 /* ════════════════════════════════════════════════════════════
+   PARCHE: renderStock
+   ------------------------------------------------------------
+   El app-editar.js y el app-registro.js que hay DESPLEGADOS llaman a
+   renderStock(), pero esa funcion no existe en ningun archivo del repo. Es la
+   Fase 2 (inventario de suplementos): las llamadas se subieron y la funcion se
+   quedo por el camino.
+
+   El efecto no era un error visible, y por eso costo verlo: initSuplementos()
+   hace siete cosas en fila y renderStock() esta en medio. Reventaba DESPUES de
+   pintar el horario y ANTES de rellenar el campo de fecha, asi que la pantalla
+   se veia bien pero el dia quedaba vacio y cargarDia() nunca llegaba a correr.
+   Resultado: el tracker en 0 aunque la hoja tuviera las tomas guardadas.
+
+   Este hueco no hace nada A PROPOSITO: no hay inventario que pintar todavia.
+   Cuando la Fase 2 se construya de verdad, su propia declaracion de
+   renderStock en app-editar.js pisara a esta —se declara despues— y el parche
+   se retira solo.
+   ════════════════════════════════════════════════════════════ */
+let _avisoStock = false;
+function renderStock(){
+  if(!_avisoStock){
+    _avisoStock = true;
+    console.info('renderStock: la Fase 2 (inventario) no esta construida; se ignora.');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    RECOMPOSICION Y CALIDAD
    ------------------------------------------------------------
    La version vieja comparaba mediciones CONTIGUAS con umbrales de 0.3 kg de
