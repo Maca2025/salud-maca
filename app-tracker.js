@@ -1345,3 +1345,157 @@ function avisoIngestaBaja(){
          `déficit de tiamina, que se agota en semanas y no en años. Merece mencionarlo ` +
          `en consulta.`;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   LA SECCIÓN DE EJERCICIO
+   ---------------------------------------------------------------
+   La tarjeta de Hoy sirve para hacer; esto sirve para mirar. Aqui va
+   el suelo semanal, el historial y si se esta cumpliendo.
+
+   El suelo se pinta en tramos, igual que el de masa magra: no se
+   avanza hacia un minimo, se guarda distancia. Y NO hay rojo por una
+   semana floja — a lo sumo ambar. Esa es la regla desde el principio:
+   nada en la app puede hacerla sentir que fallo.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Lunes como primer dia: la semana de entrenamiento empieza el lunes,
+   no el domingo, aunque getDay() diga otra cosa. */
+function lunesDe(iso){
+  const p = iso.split('-');
+  const d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+  const dow = (d.getUTCDay() + 6) % 7;          // 0 = lunes
+  d.setUTCDate(d.getUTCDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
+
+function semanas(n){
+  const out = [];
+  const p = lunesDe(hoyISO()).split('-');
+  for(let i = n-1; i >= 0; i--){
+    const d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2] - i*7));
+    const ini = d.toISOString().slice(0, 10);
+    const fin = new Date(Date.UTC(+p[0], +p[1]-1, +p[2] - i*7 + 6)).toISOString().slice(0, 10);
+    const s = (EJER || []).filter(e => e.fecha >= ini && e.fecha <= fin);
+    out.push({ini, fin, actual: i === 0,
+              dias: new Set(s.map(e => e.fecha)).size,
+              fuerza: s.filter(e => e.tipo === 'fuerza').length,
+              minutos: s.reduce((t, e) => t + (e.minutos || 0), 0)});
+  }
+  return out;
+}
+
+function tarjetaSuelo(){
+  const s = semanas(1)[0];
+  const okF = s.fuerza >= SUELO_FUERZA_SEM;
+  const okD = s.dias   >= SUELO_DIAS_SEM;
+  const chip = (hecho, meta) => hecho >= meta ? 'bien' : (hecho >= meta-1 ? 'ojo' : 'ojo');
+
+  return `
+  <div class="pc-grid">
+    <div class="pc-card">
+      <div class="pc-label">Fuerza esta semana <span class="pc-sub">· suelo ${SUELO_FUERZA_SEM}</span></div>
+      <div class="pc-fila">
+        <span class="pc-num">${s.fuerza}</span><span class="pc-uni">de ${SUELO_FUERZA_SEM}</span>
+        <span class="pc-chip ${chip(s.fuerza, SUELO_FUERZA_SEM)}">${
+          okF ? 'suelo cumplido' : (SUELO_FUERZA_SEM - s.fuerza) + ' más'}</span>
+      </div>
+      <div class="pc-pie">Es lo único que defiende tus ${mlgDe(DATA[DATA.length-1] || {peso:0,grasa:0})} kg de masa magra.</div>
+    </div>
+    <div class="pc-card">
+      <div class="pc-label">Días activos <span class="pc-sub">· suelo ${SUELO_DIAS_SEM}</span></div>
+      <div class="pc-fila">
+        <span class="pc-num">${s.dias}</span><span class="pc-uni">de ${SUELO_DIAS_SEM}</span>
+        <span class="pc-chip ${chip(s.dias, SUELO_DIAS_SEM)}">${
+          okD ? 'suelo cumplido' : (SUELO_DIAS_SEM - s.dias) + ' más'}</span>
+      </div>
+      <div class="pc-pie">Cinco minutos de rebounder cuentan igual que una sesión entera.</div>
+    </div>
+  </div>`;
+}
+
+function tablaSemanas(){
+  const ss = semanas(8).slice().reverse();
+  const filas = ss.map(s => {
+    const okF = s.fuerza >= SUELO_FUERZA_SEM, okD = s.dias >= SUELO_DIAS_SEM;
+    return `<tr${s.actual ? ' class="latest"' : ''}>
+      <td>${esc(s.ini)}${s.actual ? ' ★' : ''}</td>
+      <td class="${okF ? 'd-good' : ''}">${s.fuerza}</td>
+      <td class="${okD ? 'd-good' : ''}">${s.dias}</td>
+      <td>${s.minutos || '—'}</td>
+      <td>${okF && okD ? '<span class="recomp-badge">suelo</span>' : ''}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="tbl-section">Las últimas ocho semanas</div>
+    <div class="recomp-leyenda">Verde cuando la semana llega al suelo. Una semana floja
+      no es un fallo: el objetivo es la tendencia, no la perfección.</div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Semana del</th><th>Fuerza</th><th>Días</th><th>Min</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`;
+}
+
+const ICONO_TIPO = {fuerza:'💪', cardio:'🚴', movilidad:'🧘', suelo:'🔽'};
+
+function tablaSesiones(){
+  if(!(EJER || []).length) return '';
+  const ult = EJER.slice(-30).reverse();
+  return `
+    <div class="tbl-section">Sesiones</div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Qué</th><th>Min</th><th>Después de</th></tr></thead>
+      <tbody>${ult.map(e => `<tr>
+        <td>${esc(e.fecha)}</td>
+        <td>${ICONO_TIPO[e.tipo] || ''} ${esc(e.tipo)}</td>
+        <td>${esc(e.actividad || '')}</td>
+        <td>${e.minutos || '—'}</td>
+        <td>${esc(e.ancla || '')}</td></tr>`).join('')}
+      </tbody></table></div>`;
+}
+
+function renderEjercicio(){
+  const host = document.getElementById('ejercicio-host');
+  if(!host) return;
+
+  if(!(EJER || []).length){
+    host.innerHTML = `
+      <div class="proyeccion">Todavía no hay ninguna sesión registrada. El objetivo de
+        masa magra —no bajar de ${sueloMlg()} kg— depende entero de esto y de la proteína.
+        <br><br>El suelo son <strong>${SUELO_FUERZA_SEM} sesiones de fuerza</strong> y
+        <strong>${SUELO_DIAS_SEM} días con movimiento</strong> por semana. Y cinco minutos
+        de rebounder cuentan como día activo: los días malos existen.
+        <button class="blk-btn primary" style="margin-top:10px" onclick="abrirSesionFuerza()">
+          Empezar por la sesión A</button>
+      </div>`;
+    return;
+  }
+
+  const h = habito();
+  host.innerHTML = `
+    ${tarjetaSuelo()}
+    <div class="pc-aviso" style="margin-top:12px">
+      <strong>${h.dias} de los últimos ${h.ventana} días</strong> con movimiento ·
+      ${fuerza28()} sesiones de fuerza en los últimos 28 días, que es la misma ventana
+      con la que se lee tu masa magra.
+    </div>
+    ${tablaSemanas()}
+    ${tablaSesiones()}`;
+}
+
+function initEjercicio(){
+  renderEjercicio();
+  const cv = document.getElementById('cEjer');
+  if(!cv) return;
+  const ss = semanas(8);
+  if(chartReg.cEjer) chartReg.cEjer.destroy();
+  chartReg.cEjer = new Chart(cv, {
+    type:'bar',
+    data:{labels: ss.map(s => s.ini.slice(5)), datasets:[
+      {label:'Fuerza', data: ss.map(s => s.fuerza), backgroundColor:'#993556'},
+      {label:'Días activos', data: ss.map(s => s.dias), backgroundColor:'#52b788'}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
+      scales:{x:{grid:{color:GRID},ticks:{font:{size:9}}},
+              y:{grid:{color:GRID},ticks:{font:{size:9},stepSize:1},beginAtZero:true}}}
+  });
+}

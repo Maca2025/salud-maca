@@ -7,14 +7,17 @@
 const lazyInited = {composicion:false, recomposicion:false, resumen:false, sangre:false, planes:false, suplementos:false, fotos:false};
 
 function goHome() {
-  ['composicion','laboratorio','planes','suplementos','fotos'].forEach(s=>document.getElementById('section-'+s).style.display='none');
+  ['composicion','laboratorio','planes','suplementos','fotos','ejercicio'].forEach(s=>document.getElementById('section-'+s).style.display='none');
   document.getElementById('home-view').style.display='block';
 }
 
 function gotoSection(id) {
   document.getElementById('home-view').style.display='none';
-  ['composicion','laboratorio','planes','suplementos','fotos'].forEach(s=>document.getElementById('section-'+s).style.display='none');
+  ['composicion','laboratorio','planes','suplementos','fotos','ejercicio'].forEach(s=>document.getElementById('section-'+s).style.display='none');
   document.getElementById('section-'+id).style.display='block';
+  if(id==='ejercicio'&&!lazyInited.ejercicio){
+    requestAnimationFrame(()=>{initEjercicio(); lazyInited.ejercicio=true;});
+  }
   if(id==='composicion'&&!lazyInited.composicion){
     requestAnimationFrame(()=>{initComposicion(); lazyInited.composicion=true;});
   }

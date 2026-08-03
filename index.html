@@ -15,7 +15,7 @@
   <link rel="icon" href="icon-app.png"/>
   <title>Maca · Salud</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="estilos.css?v=20260803i"/>
+  <link rel="stylesheet" href="estilos.css?v=20260803j"/>
 </head>
 <body>
 
@@ -114,6 +114,14 @@
         <div class="hc-sub" id="hc-fotos-sub">Comparativa visual</div>
         <div class="hc-metrics" id="hc-fotos-metrics"></div>
         <div class="hc-btn">Ver comparativa →</div>
+      </div>
+
+      <div class="home-card" onclick="gotoSection('ejercicio')">
+        <div class="hc-icon">🏃</div>
+        <div class="hc-title">Ejercicio</div>
+        <div class="hc-sub" id="hc-ejer-sub">Fuerza, cardio y movimiento</div>
+        <div class="hc-metrics" id="hc-ejer-metrics"></div>
+        <div class="hc-btn">Ver ejercicio →</div>
       </div>
 
       <!-- Tarjeta: Suplementos & Medicamentos -->
@@ -565,6 +573,27 @@
      La lista de posturas NO está aquí: llega del Apps Script (que es
      privado) para no publicar en GitHub cómo se fotografía.
 ══════════════════════════════════════════════════════════ -->
+<div id="section-ejercicio" style="display:none">
+  <div class="sec-hdr">
+    <button class="back-btn" onclick="goHome()">← Inicio</button>
+    <h2>🏃 Ejercicio</h2>
+    <div class="sec-actions">
+      <button class="blk-btn primary" onclick="abrirSesionFuerza()">＋ Sesión de fuerza</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div id="ejercicio-host"></div>
+    <div class="chart-card" style="margin-top:14px">
+      <h3>Fuerza y días activos por semana</h3>
+      <div class="chart-wrap" style="height:280px"><canvas id="cEjer"></canvas></div>
+      <div style="margin-top:8px;font-size:0.72rem;color:#888;line-height:1.5">
+        El suelo es 2 sesiones de fuerza y 4 días con movimiento por semana.
+        Una semana floja no borra las anteriores.
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="section-fotos" style="display:none">
   <div class="section-nav">
     <button class="back-btn" onclick="goHome()">← Inicio</button>
@@ -605,21 +634,21 @@
      HTML MODULE: FOOTER
 ══════════════════════════════════════════════════════════ -->
 <footer id="pie">Datos cargados desde Google Sheets</footer>
-<script src="app-datos.js?v=20260803i"></script>
-<script src="app-base.js?v=20260803i"></script>
-<script src="app-composicion.js?v=20260803i"></script>
-<script src="app-laboratorio.js?v=20260803i"></script>
-<script src="app-planes.js?v=20260803i"></script>
-<script src="app-suplementos.js?v=20260803i"></script>
-<script src="app-ingesta.js?v=20260803i"></script>
-<script src="app-alimentos.js?v=20260803i"></script>
-<script src="app-tracker.js?v=20260803i"></script>
-<script src="app-editar.js?v=20260803i"></script>
-<script src="app-registro.js?v=20260803i"></script>
-<script src="app-fotos.js?v=20260803i"></script>
-<script src="app-nav.js?v=20260803i"></script>
-<script src="app-macros.js?v=20260803i"></script>
-<script src="app-formularios.js?v=20260803i"></script>
-<script src="app-ia.js?v=20260803i"></script>
+<script src="app-datos.js?v=20260803j"></script>
+<script src="app-base.js?v=20260803j"></script>
+<script src="app-composicion.js?v=20260803j"></script>
+<script src="app-laboratorio.js?v=20260803j"></script>
+<script src="app-planes.js?v=20260803j"></script>
+<script src="app-suplementos.js?v=20260803j"></script>
+<script src="app-ingesta.js?v=20260803j"></script>
+<script src="app-alimentos.js?v=20260803j"></script>
+<script src="app-tracker.js?v=20260803j"></script>
+<script src="app-editar.js?v=20260803j"></script>
+<script src="app-registro.js?v=20260803j"></script>
+<script src="app-fotos.js?v=20260803j"></script>
+<script src="app-nav.js?v=20260803j"></script>
+<script src="app-macros.js?v=20260803j"></script>
+<script src="app-formularios.js?v=20260803j"></script>
+<script src="app-ia.js?v=20260803j"></script>
 </body>
 </html>

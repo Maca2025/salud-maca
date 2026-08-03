@@ -267,10 +267,18 @@ function tarjetaMagra(){
     ? `${Math.abs(margen)} kg por debajo`
     : `margen ${margen} kg`;
 
+  // Cierra el circulo: la conducta que sostiene este numero, en la misma
+  // ventana de 28 dias con la que se lee la masa magra. app-tracker.js
+  // carga despues, de ahi la guarda con typeof.
+  const nf = (typeof fuerza28 === 'function') ? fuerza28() : null;
+  const conducta = nf === null ? ''
+    : (nf ? ` · <strong style="display:inline;font-size:inherit;text-transform:none;letter-spacing:0">${nf}</strong> ${nf===1?'sesión':'sesiones'} de fuerza en 28 días`
+          : ' · <span class="pc-sub">sin sesiones de fuerza en 28 días</span>');
+
   const pie = v
     ? `${signoKg(v.delta)} kg en ${v.dias} días · ${signoKg(v.ritmo)} kg/sem ·
-       ${v.estable ? 'estable' : 'ritmo alto'}`
-    : `hacen falta ${VENTANA_MAGRA} días entre mediciones para leerlo`;
+       ${v.estable ? 'estable' : 'ritmo alto'}${conducta}`
+    : `hacen falta ${VENTANA_MAGRA} días entre mediciones para leerlo${conducta}`;
 
   return `
   <div class="pc-card">
