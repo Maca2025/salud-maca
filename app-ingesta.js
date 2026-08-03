@@ -56,18 +56,22 @@ function marcarCambio(){
 function pintarEstadoLog(){
   const el = document.getElementById('log-estado');
   if(!el) return;
-  /* estilos.css tiene .log-estado.ok y .pend, pero no .err: el rojo va en
+  /* Solo el simbolo, sin texto: vive en la esquina de la tarjeta de proteina.
+     El titulo si lleva la palabra, para quien use lector de pantalla.
+     estilos.css tiene .log-estado.ok y .pend, pero no .err: el rojo va en
      linea para no tener que tocar la hoja de estilos. */
   const mapa = {
-    ok:        ['ok',   '✓ guardado'],
-    pend:      ['pend', '● sin guardar'],
-    guardando: ['pend', 'guardando…'],
-    error:     ['pend', '✗ no se guardó · toca para reintentar'],
+    ok:        ['ok',   '✓', 'Guardado'],
+    pend:      ['pend', '●', 'Sin guardar'],
+    guardando: ['pend', '⋯', 'Guardando'],
+    error:     ['pend', '✗', 'No se guardó. Toca para reintentar'],
   };
-  const [cls, txt] = mapa[_estadoLog] || mapa.ok;
+  const [cls, simbolo, titulo] = mapa[_estadoLog] || mapa.ok;
   const malo = _estadoLog === 'error';
   el.className = 'log-estado ' + cls;
-  el.textContent = _itemsHoy.length || malo ? txt : '';
+  el.textContent = simbolo;
+  el.title = titulo;
+  el.setAttribute('aria-label', titulo);
   el.style.color = malo ? '#c0392b' : '';
   el.style.cursor = malo ? 'pointer' : '';
   el.onclick = malo ? guardarLog : null;
@@ -192,16 +196,7 @@ function renderIngestaHoy(){
         </div>
       </div>
 
-      <div class="log-tot" style="justify-content:flex-end">
-        <div class="log-estado" id="log-estado"></div>
-        <div class="lt-sub">
-          <span class="lt-an">${t.pa} animal</span>
-          <span class="lt-ve">${t.pv} vegetal</span>
-          <span class="lt-kc">${t.kcal} kcal</span>
-        </div>
-      </div>
     </div>`;
-  pintarEstadoLog();
 }
 
 function agregarItem(nombre, g){
@@ -605,6 +600,16 @@ function posEnEscala(v, tope){
    ya esta en la hoja. `pie` y `extra` los pone quien la llama.
    Vive en app-ingesta.js, que carga ANTES que app-tracker.js: desde alli se
    llama en tiempo de ejecucion, con la guarda de typeof. */
+/* Los mismos chips que habia sueltos debajo del registro, ahora dentro de la
+   tarjeta. Las clases lt-an / lt-ve / lt-kc ya existen en estilos.css. */
+function chipsProteina(pa, pv, kcal){
+  return `<div class="lt-sub" style="justify-content:flex-start;margin-top:0">
+    <span class="lt-an">${pa} animal</span>
+    <span class="lt-ve">${pv} vegetal</span>
+    <span class="lt-kc">${kcal} kcal</span>
+  </div>`;
+}
+
 function tarjetaProteina(o){
   const prot = o.prot, obj = o.obj;
   if(!obj){
@@ -619,9 +624,13 @@ function tarjetaProteina(o){
   const estado = prot < alerta ? 'mal' : (prot < obj.min ? 'ojo' : 'bien');
   const chip = prot < obj.min ? `faltan ${obj.min - prot} g`
              : (prot > obj.max ? 'por encima del rango' : 'en rango');
+  /* El visto de guardado va aqui, en la esquina de la tarjeta, sin texto.
+     Lo actualiza pintarEstadoLog sin repintar la tarjeta entera. */
+  const visto = o.estado
+    ? '<span id="log-estado" class="log-estado ok" style="float:right;margin:0"></span>' : '';
   return `
   <div class="pc-card">
-    <div class="pc-label">Proteina <span class="pc-sub">&middot; ${o.periodo || 'hoy'} &middot; suelo ${obj.min} g</span></div>
+    <div class="pc-label">${visto}Proteina <span class="pc-sub">&middot; ${o.periodo || 'hoy'} &middot; suelo ${obj.min} g</span></div>
     <div class="pc-fila">
       <span class="pc-num">${prot}</span><span class="pc-uni">g</span>
       <span class="pc-chip ${estado}">${chip}</span>
@@ -672,18 +681,20 @@ function renderIngestaResumen(){
   const th = (typeof totalesHoy === 'function') ? totalesHoy() : {pa:0,pv:0,kcal:0};
   const protHoy = th.pa + th.pv;
   const aguaHoy = aguaLog();
+  const chips = chipsProteina(th.pa, th.pv, th.kcal);
 
   /* El promedio sigue siendo util, pero como contexto en el pie, no como
      titular: mezclar los dos periodos sin decirlo fue lo que confundio. */
   const ult7 = INGESTA.slice(-7);
-  let pieProt = `${th.pa} g animal &middot; ${th.pv} g vegetal &middot; ${th.kcal} kcal`;
+  let pieProt = chips;
   let pieAgua = 'Se guarda sola al tocar un vaso.';
   if(ult7.length){
     const prom = k => Math.round(ult7.reduce((s,x)=>s+(x[k]||0),0)/ult7.length);
     const pProm = prom('prot_animal') + prom('prot_vegetal');
     const dias = `${ult7.length} ${ult7.length===1?'dia':'dias'}`;
-    pieProt += `<br>Promedio de ${dias}: ${pProm} g`;
+    pieProt += `<div style="margin-top:5px">Promedio de ${dias}: ${pProm} g`;
     if(peso) pieProt += ` (${(pProm/peso).toFixed(2)} g/kg)`;
+    pieProt += '</div>';
     pieAgua += `<br>Promedio de ${dias}: ${(prom('agua')/1000).toFixed(2)} L`;
   }
 
@@ -695,21 +706,53 @@ function renderIngestaResumen(){
 
   cont.innerHTML = `
     <div class="pc-grid">
-      ${tarjetaProteina({prot:protHoy, obj, peso, periodo:'hoy', pie:pieProt})}
+      ${tarjetaProteina({prot:protHoy, obj, peso, periodo:'hoy', pie:pieProt, estado:true})}
       ${tarjetaAgua({agua:aguaHoy, periodo:'hoy', pie:pieAgua})}
     </div>
     ${crea}`;
+  pintarEstadoLog();
 }
 
 /* UN SOLO EJE, y por DIA. Antes iba proteina a la izquierda y musculo a la
    derecha: con dos escalas elegidas a mano, "van juntas" lo decide el eje y no
    el dato. El musculo se lee en la columna delta de la tabla.
-   Las barras son de cada dia y encima va el promedio de su semana como linea
-   escalonada: el escalon deja ver que dias tiran del promedio arriba o abajo.
+   Una barra por dia y una sola marca horizontal: el suelo. Lo unico que hay
+   que leer de un vistazo es que dias lo pasan y cuales no.
    Los dias sin registrar van en null, NO en cero: no anotar no es lo mismo que
    no comer, igual que la celda vacia del tracker de suplementos.
    p2() vive en app-suplementos.js, que carga antes. */
 const DIAS_GRAFICA = 35;
+
+/* EL UMBRAL SE DIBUJA A MANO, NO COMO DATASET.
+   Con el eje Y en `stacked`, Chart.js apila TAMBIEN las lineas sobre las
+   barras: el suelo de 118 g salia pintado a 224 el dia que habia 106 g de
+   barra. Un plugin dibuja encima del area y se salta las escalas apiladas,
+   asi que la linea no se puede volver a mover. */
+const plugSuelo = {
+  id:'suelo',
+  afterDatasetsDraw(chart, args, opts){
+    const v = opts && opts.valor;
+    if(v == null) return;
+    const {ctx, chartArea, scales} = chart;
+    const y = scales.y.getPixelForValue(v);
+    if(y < chartArea.top || y > chartArea.bottom) return;
+    ctx.save();
+    ctx.strokeStyle = '#b91c1c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5,4]);
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, y);
+    ctx.lineTo(chartArea.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#b91c1c';
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`suelo ${v} g`, chartArea.right - 3, y - 3);
+    ctx.restore();
+  }
+};
 
 function lunesISO(iso){
   const d = new Date(iso+'T00:00:00');
@@ -724,18 +767,13 @@ function diasIngesta(){
   const hasta = new Date(hoyISO()+'T00:00:00');
   if(hasta < desde) return [];
 
-  const sem = {};
-  semanasIngesta().forEach(s=>{ sem[s.inicio] = s.protDia; });
-
   const fuera = [];
   for(let d = new Date(hasta); d >= desde; d.setDate(d.getDate()-1)){
     const iso = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
     const r = INGESTA.find(x=>x.fecha===iso);
-    const l = lunesISO(iso);
     fuera.push({iso,
       protA: r ? (r.prot_animal||0) : null,
-      protV: r ? (r.prot_vegetal||0) : null,
-      semana: sem[l] != null ? sem[l] : null});
+      protV: r ? (r.prot_vegetal||0) : null});
     if(fuera.length >= DIAS_GRAFICA) break;
   }
   return fuera.reverse();
@@ -761,25 +799,19 @@ function initGraficaIngesta(){
   const obj = metaProteina();
   const datos = [
     {type:'bar', label:'Proteina animal g', data:dias.map(d=>d.protA),
-     backgroundColor:'#c98a7a', stack:'p', borderRadius:2, order:3},
+     backgroundColor:'#c98a7a', stack:'p', borderRadius:2},
     {type:'bar', label:'Proteina vegetal g', data:dias.map(d=>d.protV),
-     backgroundColor:'#7fb3a0', stack:'p', borderRadius:2, order:3},
-    {type:'line', label:'Promedio de la semana', data:dias.map(d=>d.semana),
-     borderColor:'#1b4332', borderWidth:2, pointRadius:0, stepped:'middle',
-     spanGaps:false, fill:false, order:1},
+     backgroundColor:'#7fb3a0', stack:'p', borderRadius:2},
   ];
-  if(obj){
-    datos.push({type:'line', label:`Suelo ${obj.min} g`,
-      data:dias.map(()=>obj.min), borderColor:'#b91c1c', borderWidth:1.5,
-      borderDash:[5,4], pointRadius:0, fill:false, order:2});
-  }
 
   if(chartReg.cIngesta) chartReg.cIngesta.destroy();
   chartReg.cIngesta = new Chart(el, {
     data:{labels:dias.map(etiqueta), datasets:datos},
+    plugins:[plugSuelo],
     options:{responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index', intersect:false},
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        suelo:{valor: obj ? obj.min : null},
         tooltip:{callbacks:{label:c=>
           c.parsed.y == null ? null : `${c.dataset.label}: ${Math.round(c.parsed.y)} g`}}},
       scales:{

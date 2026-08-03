@@ -843,9 +843,17 @@ function renderHoy(){
   /* Aqui p sale de la HOJA (protHoyG), no de la lista en pantalla: desde Hoy
      no hay borrador que contar. Por eso puede ir por detras de lo que se ve en
      la pestana de ingesta hasta que se pulse "Guardar dia". */
+  /* Los mismos chips que en la pestana de ingesta. Salen de la fila de hoy en
+     la hoja, que es de donde sale tambien protHoyG. */
+  const dHoy = (typeof ingestaDe === 'function') ? ingestaDe(hoyISO()) : null;
+  const pieProt = (typeof chipsProteina === 'function')
+    ? chipsProteina(Math.round((dHoy && dHoy.prot_animal) || 0),
+                    Math.round((dHoy && dHoy.prot_vegetal) || 0),
+                    Math.round((dHoy && dHoy.kcal) || 0))
+    : 'Lo ya guardado en la hoja.';
   const prot = (typeof tarjetaProteina === 'function')
     ? tarjetaProteina({prot:p, obj:o,
-        periodo:'hoy', pie:'Lo ya guardado en la hoja.', extra: botonComida})
+        periodo:'hoy', pie:pieProt, extra: botonComida})
     : `<div class="hoy-card">
          <div class="hoy-hdr"><span>🍗 Proteína</span>
            <span class="hoy-sub">${p} g de ${o.min}–${o.max}</span></div>
@@ -861,7 +869,7 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      ${bloque}${agua}${tarjetaMovimiento()}${prot}${tarjetaTirze()}
+      ${agua}${prot}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
     </div>`;
 }
 
