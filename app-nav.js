@@ -77,6 +77,7 @@ function hidratar(d){
   DAYS = (d.composicion || []).map(m => m.dias);
   if(d.objetivo) OBJ = Object.assign({}, OBJ, d.objetivo);
   if(d.suelo)    SUELO = Object.assign({}, SUELO, d.suelo);
+  VERSION_API = d.version || '';
 
   // ── Laboratorio ──
   const lab = d.laboratorio || {fechas:[], marcadores:[], secciones:[]};

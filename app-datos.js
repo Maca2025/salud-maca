@@ -48,6 +48,11 @@ let OBJ = {ecf:0, icf:0, prot:0, min:0, grasa:0, peso:65};
 /* Suelo de masa magra: la linea que no se cruza. Vive en la fila SUELO de la
    hoja de composicion; hasta que exista, este valor por defecto es el acordado. */
 let SUELO = {mlg:47};
+
+/* Version del Apps Script que esta atendiendo. Se pinta en Ajustes: el editor
+   ejecuta el codigo guardado y la app la version publicada, y confundirlas
+   cuesta caro. Vacia = el script todavia no la manda. */
+let VERSION_API = '';
 let SD = {}, SR = {}, SSECTIONS = [], SUPS = [];
 let EXP = {}, INTERACCIONES = [], STATUS_PANEL = {controlados:[], vigilancia:[], pendientes:[]};
 let OPTIMOS = {}, INGESTA = [];

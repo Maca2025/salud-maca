@@ -248,6 +248,15 @@ function abrirAjustes(){
         <div style="font-size:.72rem;color:#999;line-height:1.5">
           El token debe coincidir con la variable <code>TOKEN</code> del Apps Script.
         </div>
+        <div style="font-size:.72rem;color:#999;line-height:1.5;border-top:1px solid #eee;
+                    padding-top:8px;margin-top:2px">
+          Versión del script que responde:
+          <strong style="color:${VERSION_API?'#2d6a4f':'#c0392b'}">${VERSION_API
+            ? esc(VERSION_API)
+            : 'sin identificar — es una versión anterior a agosto de 2026'}</strong><br>
+          Si acabas de cambiar el Apps Script y aquí sigue saliendo la fecha vieja,
+          es que guardaste pero no publicaste una versión nueva.
+        </div>
       </div>
       <div class="blk-modal-foot">
         <button class="blk-btn ghost" onclick="cerrarAjustes()">Cancelar</button>
