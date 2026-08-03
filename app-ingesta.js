@@ -29,14 +29,48 @@ function aguaLog(){
   return d ? (d.agua || 0) : 0;
 }
 let _fechaLog  = null;   // fecha del borrador cargado en memoria
-let _sinGuardar = false; // hay cambios en pantalla que no están en la hoja
+/* 'ok' | 'pend' | 'guardando' | 'error'. Sustituye al viejo _sinGuardar: ahora
+   la comida se guarda sola al tocarla, igual que el agua y los suplementos. */
+let _estadoLog = 'ok';
+let _timerLog  = null;
+let _comprobado = null;  // fecha para la que ya se comprobo contra la hoja
 const ING_KEY  = 'maca-ingesta-borrador';
 
 /* El borrador vive en el navegador para que recargar no borre lo que
    llevas sin guardar. iOS cierra pestañas en segundo plano con facilidad. */
+/* Antes esto solo marcaba "sin guardar" y esperaba al boton. Ahora programa el
+   guardado. El borrador local se mantiene como red por si falla la escritura o
+   se cierra la pestana antes de que salga.
+   Va con retardo de 900 ms a proposito: sumar cuatro alimentos seguidos escribe
+   UNA vez, no cuatro. La comida no se puede mandar en modo merge como los
+   suplementos —guardarIngesta reemplaza el dia entero— asi que cada escritura
+   cuesta, y conviene no encadenarlas. */
 function marcarCambio(){
-  _sinGuardar = true;
   guardarBorradorLog();
+  _estadoLog = 'pend';
+  pintarEstadoLog();
+  clearTimeout(_timerLog);
+  _timerLog = setTimeout(guardarLog, 900);
+}
+
+function pintarEstadoLog(){
+  const el = document.getElementById('log-estado');
+  if(!el) return;
+  /* estilos.css tiene .log-estado.ok y .pend, pero no .err: el rojo va en
+     linea para no tener que tocar la hoja de estilos. */
+  const mapa = {
+    ok:        ['ok',   '✓ guardado'],
+    pend:      ['pend', '● sin guardar'],
+    guardando: ['pend', 'guardando…'],
+    error:     ['pend', '✗ no se guardó · toca para reintentar'],
+  };
+  const [cls, txt] = mapa[_estadoLog] || mapa.ok;
+  const malo = _estadoLog === 'error';
+  el.className = 'log-estado ' + cls;
+  el.textContent = _itemsHoy.length || malo ? txt : '';
+  el.style.color = malo ? '#c0392b' : '';
+  el.style.cursor = malo ? 'pointer' : '';
+  el.onclick = malo ? guardarLog : null;
 }
 
 function guardarBorradorLog(){
@@ -107,12 +141,12 @@ function renderIngestaHoy(){
     // Base: lo que ya está en la hoja
     if(y && y.detalle) {
       _itemsHoy = parseDetalle(y.detalle);
-      _sinGuardar = false;          // lo que vino de la hoja ya está guardado
+      _estadoLog = 'ok';            // lo que vino de la hoja ya está guardado
     }
     // Encima, el borrador local si trae más cosas (quedó sin guardar)
     if(b && b.items && b.items.length > _itemsHoy.length){
       _itemsHoy = b.items.map(x=>itemDe(x.a, x.g));
-      _sinGuardar = true;           // el borrador traía cosas sin guardar
+      _estadoLog = 'pend';          // el borrador traía cosas sin guardar
     }
   }
   const t = totalesHoy();
@@ -137,19 +171,6 @@ function renderIngestaHoy(){
 
   cont.innerHTML = `
     <div class="log-hoy">
-      <div class="log-tot">
-        <div class="lt-big"><strong>${t.pa+t.pv} g</strong><span>proteína hoy</span></div>
-        ${(!_itemsHoy.length) ? '' :
-          (_sinGuardar
-            ? '<div class="log-estado pend">● sin guardar</div>'
-            : '<div class="log-estado ok">✓ guardado</div>')}
-        <div class="lt-sub">
-          <span class="lt-an">${t.pa} animal</span>
-          <span class="lt-ve">${t.pv} vegetal</span>
-          <span class="lt-kc">${t.kcal} kcal</span>
-        </div>
-      </div>
-
       <div class="log-acciones">
         <button class="acc-btn" onclick="dictarComida()" id="btn-dictar">🎤 Dictar</button>
         <button class="acc-btn" onclick="fotoComida()">📷 Foto</button>
@@ -171,10 +192,16 @@ function renderIngestaHoy(){
         </div>
       </div>
 
-      <button class="blk-btn primary log-guardar" id="ing-guardar" onclick="guardarIngestaHoy()">
-        Guardar día</button>
-      <div id="ing-msg"></div>
+      <div class="log-tot" style="justify-content:flex-end">
+        <div class="log-estado" id="log-estado"></div>
+        <div class="lt-sub">
+          <span class="lt-an">${t.pa} animal</span>
+          <span class="lt-ve">${t.pv} vegetal</span>
+          <span class="lt-kc">${t.kcal} kcal</span>
+        </div>
+      </div>
     </div>`;
+  pintarEstadoLog();
 }
 
 function agregarItem(nombre, g){
@@ -420,43 +447,47 @@ function sumarReceta(key, btn){
   renderIngestaHoy();
 }
 
-async function guardarIngestaHoy(){
-  const btn = document.getElementById('ing-guardar');
-  const msg = document.getElementById('ing-msg');
+/* Guarda la comida del dia. Ya no hay boton: lo dispara marcarCambio con
+   retardo, igual que el agua y los suplementos se guardan al tocarlos.
 
-  // Antes de escribir, comprobar qué hay en la hoja para hoy.
-  // Guardar reemplaza el día entero, así que si otro dispositivo
-  // registró algo que aquí no está, hay que avisarlo.
-  btn.disabled = true; btn.textContent = 'Comprobando…';
-  try {
-    const d = await api({action:'ingesta'});
-    const serv = (d.ingesta || []).find(x=>x.fecha===hoyISO());
-    if(serv && serv.detalle){
-      const enServidor = parseDetalle(serv.detalle);
-      const faltan = enServidor.filter(s =>
-        !_itemsHoy.some(l => l.alimento===s.alimento && l.g===s.g));
-      if(faltan.length){
-        const nombres = faltan.map(x=>`${x.alimento} ${x.g} g`).join(', ');
-        const sumar = confirm(
-          `Hay ${faltan.length} cosa(s) registradas hoy que no están en esta pantalla:\n\n` +
-          nombres + `\n\n¿Las sumo a lo que llevas aquí?\n\n` +
-          `Aceptar = conservarlas · Cancelar = reemplazar el día con lo que ves.`
-        );
-        if(sumar){
-          faltan.forEach(x=>_itemsHoy.push(x));
-          guardarBorradorLog();
-          renderIngestaHoy();
+   LA COMPROBACION CONTRA LA HOJA VA UNA VEZ POR DIA, NO EN CADA ESCRITURA.
+   Existe porque guardarIngesta REEMPLAZA el dia entero: si otro dispositivo
+   registro algo que aqui no esta, se perderia. El riesgo real es abrir esta
+   pantalla con datos viejos, y eso se cubre comprobando la primera vez que se
+   escribe hoy. Un confirm en cada toque seria inusable. */
+async function guardarLog(){
+  clearTimeout(_timerLog);
+  if(_estadoLog === 'guardando'){ _estadoLog = 'pend'; return; }
+  _estadoLog = 'guardando';
+  pintarEstadoLog();
+
+  if(_comprobado !== hoyISO()){
+    try {
+      const d = await api({action:'ingesta'});
+      const serv = (d.ingesta || []).find(x=>x.fecha===hoyISO());
+      if(serv && serv.detalle){
+        const enServidor = parseDetalle(serv.detalle);
+        const faltan = enServidor.filter(s =>
+          !_itemsHoy.some(l => l.alimento===s.alimento && l.g===s.g));
+        if(faltan.length){
+          const nombres = faltan.map(x=>`${x.alimento} ${x.g} g`).join(', ');
+          const sumar = confirm(
+            `Hay ${faltan.length} cosa(s) registradas hoy que no están en esta pantalla:\n\n` +
+            nombres + `\n\n¿Las sumo a lo que llevas aquí?\n\n` +
+            `Aceptar = conservarlas · Cancelar = reemplazar el día con lo que ves.`
+          );
+          if(sumar){
+            faltan.forEach(x=>_itemsHoy.push(x));
+            guardarBorradorLog();
+            renderIngestaHoy();
+          }
         }
       }
-    }
-    // Actualizar la copia local con lo que trae el servidor
-    INGESTA = d.ingesta || INGESTA;
-  } catch(e){
-    // Sin conexión no se puede comprobar: se avisa y se deja decidir
-    if(!confirm('No se pudo comprobar lo ya registrado hoy.\n\n¿Guardar de todas formas? ' +
-                'Si registraste algo desde otro dispositivo, podría reemplazarse.')){
-      btn.disabled = false; btn.textContent = 'Guardar día';
-      return;
+      INGESTA = d.ingesta || INGESTA;
+      _comprobado = hoyISO();
+    } catch(e){
+      /* Sin conexion no se puede comprobar: se escribe igual y se reintenta la
+         comprobacion la proxima vez. El borrador local sigue de red. */
     }
   }
 
@@ -468,32 +499,31 @@ async function guardarIngestaHoy(){
   const datos = {action:'guardarIngesta', fecha: hoyISO(),
     prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes, kcal:t.kcal, detalle};
 
-  btn.textContent = 'Guardando…';
   try {
-    const r = await api(datos);
+    await api(datos);
     const i = INGESTA.findIndex(x=>x.fecha===datos.fecha);
-    const nuevo = {fecha:datos.fecha, nota:'', detalle,
+    const fila = {fecha:datos.fecha, nota:'', detalle,
       prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes,
       agua:aguaLog(), creatina:(ingestaDe(datos.fecha)||{}).creatina||0, kcal:t.kcal};
-    if(i>=0) INGESTA[i] = nuevo; else INGESTA.push(nuevo);
+    if(i>=0) INGESTA[i] = fila; else INGESTA.push(fila);
     INGESTA.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-    limpiarBorradorLog();   // ya está en la hoja, el borrador sobra
-    _sinGuardar = false;
-    renderIngestaHoy();     // faltaba: el indicador no se actualizaba tras guardar
-    const m2 = document.getElementById('ing-msg');
-    if(m2) m2.innerHTML = `<span class="ing-ok">✓ ${r.actualizado?'Actualizado':'Guardado'} · ${t.pa+t.pv} g de proteína</span>`;
+    limpiarBorradorLog();
+    /* Si llegaron cambios mientras se escribia, se vuelve a programar. */
+    const habiaMas = _estadoLog === 'pend';
+    _estadoLog = habiaMas ? 'pend' : 'ok';
+    pintarEstadoLog();
+    if(habiaMas){ _timerLog = setTimeout(guardarLog, 900); return; }
     renderIngestaResumen(); renderIngestaTabla(); initGraficaIngesta();
+    if(typeof renderHoy === 'function') renderHoy();
   } catch(e){
-    const m2 = document.getElementById('ing-msg');
-    if(m2) m2.innerHTML = `<span class="ing-err">✗ ${esc(e.message)}</span>`;
+    _estadoLog = 'error';
+    pintarEstadoLog();
   }
-  const b2 = document.getElementById('ing-guardar');
-  if(b2){ b2.disabled = false; b2.textContent = 'Guardar día'; }
-  setTimeout(()=>{ const m3=document.getElementById('ing-msg'); if(m3) m3.innerHTML=''; }, 3500);
 }
 
-/* Agrupa la ingesta por semana ISO y la cruza con el cambio de
-   composición de esa misma semana. */
+/* El boton ya no existe; el nombre viejo se conserva como alias. */
+function guardarIngestaHoy(){ return guardarLog(); }
+
 function semanasIngesta(){
   if(!INGESTA.length) return [];
   const lunesDe = iso => {
@@ -569,22 +599,29 @@ function posEnEscala(v, tope){
   return Math.max(1, Math.min(99, +(v / tope * 100).toFixed(1)));
 }
 
-function tarjetaProteina(prot, obj, peso, pa, pv, dias){
+/* UNA sola definicion para las dos pantallas: Ingesta y Hoy pintan estas
+   mismas tarjetas. Reciben el valor ya calculado porque cada pantalla tiene el
+   suyo — en Ingesta cuenta lo que hay en pantalla sin guardar, en Hoy lo que
+   ya esta en la hoja. `pie` y `extra` los pone quien la llama.
+   Vive en app-ingesta.js, que carga ANTES que app-tracker.js: desde alli se
+   llama en tiempo de ejecucion, con la guarda de typeof. */
+function tarjetaProteina(o){
+  const prot = o.prot, obj = o.obj;
   if(!obj){
     return `<div class="pc-card">
-      <div class="pc-label">Proteina al dia</div>
+      <div class="pc-label">Proteina ${o.periodo ? '<span class="pc-sub">&middot; '+o.periodo+'</span>' : ''}</div>
       <div class="pc-fila"><span class="pc-num">${prot}</span><span class="pc-uni">g</span></div>
       <div class="pc-pie">Hace falta una medicion de peso para saber tu objetivo.</div>
+      ${o.extra || ''}
     </div>`;
   }
   const alerta = Math.round(obj.min * 0.75);
   const estado = prot < alerta ? 'mal' : (prot < obj.min ? 'ojo' : 'bien');
   const chip = prot < obj.min ? `faltan ${obj.min - prot} g`
              : (prot > obj.max ? 'por encima del rango' : 'en rango');
-  const gxkg = peso ? (prot/peso).toFixed(2) : null;
   return `
   <div class="pc-card">
-    <div class="pc-label">Proteina al dia <span class="pc-sub">&middot; promedio ${dias} ${dias===1?'dia':'dias'} &middot; suelo ${obj.min} g</span></div>
+    <div class="pc-label">Proteina <span class="pc-sub">&middot; ${o.periodo || 'hoy'} &middot; suelo ${obj.min} g</span></div>
     <div class="pc-fila">
       <span class="pc-num">${prot}</span><span class="pc-uni">g</span>
       <span class="pc-chip ${estado}">${chip}</span>
@@ -595,22 +632,21 @@ function tarjetaProteina(prot, obj, peso, pa, pv, dias){
       <i class="t-bien" style="flex:${Math.max(1, obj.max - obj.min)}"></i>
       <b style="left:${posEnEscala(prot, obj.max)}%"></b>
     </div>
-    <div class="pc-pie">${gxkg ? gxkg + ' g/kg &middot; ' : ''}el rango es
-      ${obj.min}&ndash;${obj.max} g &middot; animal ${pa} g, vegetal ${pv} g</div>
+    <div class="pc-pie">${o.pie || ''}</div>
+    ${o.extra || ''}
   </div>`;
 }
 
-function tarjetaAgua(agua, dias){
-  const meta = metaAguaMl();
+function tarjetaAgua(o){
+  const agua = o.agua, meta = metaAguaMl();
   const estado = agua < meta*0.5 ? 'mal' : (agua < meta ? 'ojo' : 'bien');
   const falta = Math.max(0, meta - agua);
-  const chip = agua >= meta ? 'meta cubierta'
-             : `${(falta/1000).toFixed(1)} L por debajo`;
+  const chip = agua >= meta ? 'meta cubierta' : `${(falta/1000).toFixed(1)} L por debajo`;
   return `
   <div class="pc-card">
-    <div class="pc-label">Agua al dia <span class="pc-sub">&middot; promedio ${dias} ${dias===1?'dia':'dias'} &middot; meta ${(meta/1000).toFixed(1)} L</span></div>
+    <div class="pc-label">Agua <span class="pc-sub">&middot; ${o.periodo || 'hoy'} &middot; meta ${(meta/1000).toFixed(1)} L</span></div>
     <div class="pc-fila">
-      <span class="pc-num">${(agua/1000).toFixed(1)}</span><span class="pc-uni">L</span>
+      <span class="pc-num">${(agua/1000).toFixed(2)}</span><span class="pc-uni">L</span>
       <span class="pc-chip ${estado}">${chip}</span>
     </div>
     <div class="pc-tramos">
@@ -619,100 +655,136 @@ function tarjetaAgua(agua, dias){
       <i class="t-bien" style="flex:25"></i>
       <b style="left:${posEnEscala(agua, meta*1.25)}%"></b>
     </div>
-    <div class="pc-pie">Los vasos de hoy se cuentan arriba, en el registro del dia.</div>
+    <div class="pc-pie">${o.pie || ''}</div>
+    ${o.extra || ''}
   </div>`;
-}
-
-/* La frase de arriba habla de HOY. Las tarjetas de abajo son el promedio de
-   varios dias: mezclar los dos periodos sin decirlo fue justo lo que confundio
-   (un vaso marcado hoy contra "1.2 L" del promedio). Cada numero dice su
-   periodo, y el accionable es el de hoy. */
-function lineaIngesta(obj){
-  const th = (typeof totalesHoy === 'function') ? totalesHoy() : null;
-  const protHoy = th ? (th.pa + th.pv) : 0;
-  const aguaHoy = aguaLog();
-  const meta = metaAguaMl();
-  const izq = `Hoy llevas ${protHoy} g de proteina y ${(aguaHoy/1000).toFixed(2)} L de agua`;
-  const der = obj
-    ? `tu suelo son ${obj.min} g y ${(meta/1000).toFixed(1)} L al dia`
-    : `la meta de agua son ${(meta/1000).toFixed(1)} L al dia`;
-  return `${izq} \u00b7 ${der}`;
 }
 
 function renderIngestaResumen(){
   const cont = document.getElementById('ingesta-resumen');
   if(!cont) return;
-  if(!INGESTA.length){
-    cont.innerHTML = `<div class="ing-vacio">
-      Aun no hay registros. Anota unos dias y aqui vas a ver si tu ingesta de
-      proteina esta sosteniendo tu musculo.</div>`;
-    return;
-  }
-  const ult7 = INGESTA.slice(-7);
-  const prom = k => Math.round(ult7.reduce((s,x)=>s+(x[k]||0),0)/ult7.length);
-  const pa = prom('prot_animal'), pv = prom('prot_vegetal');
-  const prot = pa + pv;
-  const agua = prom('agua');
-  const peso = DATA.length ? DATA[DATA.length-1].peso : null;
-  const obj  = metaProteina();
 
-  const dias = ult7.map(x=>x.fecha);
-  const conCrea = dias.filter(creatinaEn).length;
-  const crea = creatinaEnProtocolo()
+  const obj = metaProteina();
+  const peso = DATA.length ? DATA[DATA.length-1].peso : null;
+
+  /* HOY, no el promedio. En esta pantalla cuenta lo que hay en la lista aunque
+     no se haya guardado: es lo que ella acaba de anotar. */
+  const th = (typeof totalesHoy === 'function') ? totalesHoy() : {pa:0,pv:0,kcal:0};
+  const protHoy = th.pa + th.pv;
+  const aguaHoy = aguaLog();
+
+  /* El promedio sigue siendo util, pero como contexto en el pie, no como
+     titular: mezclar los dos periodos sin decirlo fue lo que confundio. */
+  const ult7 = INGESTA.slice(-7);
+  let pieProt = `${th.pa} g animal &middot; ${th.pv} g vegetal &middot; ${th.kcal} kcal`;
+  let pieAgua = 'Se guarda sola al tocar un vaso.';
+  if(ult7.length){
+    const prom = k => Math.round(ult7.reduce((s,x)=>s+(x[k]||0),0)/ult7.length);
+    const pProm = prom('prot_animal') + prom('prot_vegetal');
+    const dias = `${ult7.length} ${ult7.length===1?'dia':'dias'}`;
+    pieProt += `<br>Promedio de ${dias}: ${pProm} g`;
+    if(peso) pieProt += ` (${(pProm/peso).toFixed(2)} g/kg)`;
+    pieAgua += `<br>Promedio de ${dias}: ${(prom('agua')/1000).toFixed(2)} L`;
+  }
+
+  const conCrea = ult7.map(x=>x.fecha).filter(creatinaEn).length;
+  const crea = (creatinaEnProtocolo() && ult7.length)
     ? `<div class="ing-stats" style="margin-top:10px">
          <div class="ing-stat"><strong>${conCrea}/${ult7.length}</strong><span>dias con creatina</span></div>
        </div>` : '';
 
   cont.innerHTML = `
-    <div style="font-size:.86rem;color:#1b4332;font-weight:700;line-height:1.5;
-                margin:0 0 11px">${lineaIngesta(obj)}</div>
-    <div class="pc-grid">${tarjetaProteina(prot, obj, peso, pa, pv, ult7.length)}${tarjetaAgua(agua, ult7.length)}</div>
-    ${crea}
-    <div class="ing-nota">Promedios de los ultimos ${ult7.length} dias registrados.</div>`;
+    <div class="pc-grid">
+      ${tarjetaProteina({prot:protHoy, obj, peso, periodo:'hoy', pie:pieProt})}
+      ${tarjetaAgua({agua:aguaHoy, periodo:'hoy', pie:pieAgua})}
+    </div>
+    ${crea}`;
 }
 
-/* UN SOLO EJE. Antes iba proteina a la izquierda y musculo a la derecha: con
-   dos escalas elegidas a mano, "van juntas" lo decide el eje y no el dato. El
-   musculo se lee en la columna delta de la tabla, que compara contra la
-   medicion anterior de verdad.
-   Con menos de dos semanas no se dibuja nada: una sola barra ocupando todo el
-   ancho no es una grafica. */
+/* UN SOLO EJE, y por DIA. Antes iba proteina a la izquierda y musculo a la
+   derecha: con dos escalas elegidas a mano, "van juntas" lo decide el eje y no
+   el dato. El musculo se lee en la columna delta de la tabla.
+   Las barras son de cada dia y encima va el promedio de su semana como linea
+   escalonada: el escalon deja ver que dias tiran del promedio arriba o abajo.
+   Los dias sin registrar van en null, NO en cero: no anotar no es lo mismo que
+   no comer, igual que la celda vacia del tracker de suplementos.
+   p2() vive en app-suplementos.js, que carga antes. */
+const DIAS_GRAFICA = 35;
+
+function lunesISO(iso){
+  const d = new Date(iso+'T00:00:00');
+  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+}
+
+function diasIngesta(){
+  if(!INGESTA.length) return [];
+  const orden = [...INGESTA].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const desde = new Date(orden[0].fecha+'T00:00:00');
+  const hasta = new Date(hoyISO()+'T00:00:00');
+  if(hasta < desde) return [];
+
+  const sem = {};
+  semanasIngesta().forEach(s=>{ sem[s.inicio] = s.protDia; });
+
+  const fuera = [];
+  for(let d = new Date(hasta); d >= desde; d.setDate(d.getDate()-1)){
+    const iso = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+    const r = INGESTA.find(x=>x.fecha===iso);
+    const l = lunesISO(iso);
+    fuera.push({iso,
+      protA: r ? (r.prot_animal||0) : null,
+      protV: r ? (r.prot_vegetal||0) : null,
+      semana: sem[l] != null ? sem[l] : null});
+    if(fuera.length >= DIAS_GRAFICA) break;
+  }
+  return fuera.reverse();
+}
+
 function initGraficaIngesta(){
   const el = document.getElementById('cIngesta');
   const card = el ? el.closest('.chart-card') : null;
   if(!el) return;
-  const sem = semanasIngesta();
-  if(sem.length < 2){
+  const dias = diasIngesta();
+  const conDato = dias.filter(d=>d.protA != null).length;
+  if(conDato < 2){
     if(card) card.style.display = 'none';
     return;
   }
   if(card) card.style.display = '';
 
   const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const etiqueta = s => {
-    const d = new Date(s.inicio+'T00:00:00');
-    return `${d.getDate()} ${MESES[d.getMonth()]}`;
+  const etiqueta = d => {
+    const f = new Date(d.iso+'T00:00:00');
+    return `${f.getDate()} ${MESES[f.getMonth()]}`;
   };
   const obj = metaProteina();
   const datos = [
-    {type:'bar', label:'Proteina animal g/dia', data:sem.map(s=>s.protADia),
-     backgroundColor:'#c98a7a', stack:'p', borderRadius:3},
-    {type:'bar', label:'Proteina vegetal g/dia', data:sem.map(s=>s.protVDia),
-     backgroundColor:'#7fb3a0', stack:'p', borderRadius:3},
+    {type:'bar', label:'Proteina animal g', data:dias.map(d=>d.protA),
+     backgroundColor:'#c98a7a', stack:'p', borderRadius:2, order:3},
+    {type:'bar', label:'Proteina vegetal g', data:dias.map(d=>d.protV),
+     backgroundColor:'#7fb3a0', stack:'p', borderRadius:2, order:3},
+    {type:'line', label:'Promedio de la semana', data:dias.map(d=>d.semana),
+     borderColor:'#1b4332', borderWidth:2, pointRadius:0, stepped:'middle',
+     spanGaps:false, fill:false, order:1},
   ];
   if(obj){
     datos.push({type:'line', label:`Suelo ${obj.min} g`,
-      data:sem.map(()=>obj.min), borderColor:'#b91c1c', borderWidth:1.5,
-      borderDash:[5,4], pointRadius:0, fill:false});
+      data:dias.map(()=>obj.min), borderColor:'#b91c1c', borderWidth:1.5,
+      borderDash:[5,4], pointRadius:0, fill:false, order:2});
   }
 
   if(chartReg.cIngesta) chartReg.cIngesta.destroy();
   chartReg.cIngesta = new Chart(el, {
-    data:{labels:sem.map(etiqueta), datasets:datos},
+    data:{labels:dias.map(etiqueta), datasets:datos},
     options:{responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
+      interaction:{mode:'index', intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:c=>
+          c.parsed.y == null ? null : `${c.dataset.label}: ${Math.round(c.parsed.y)} g`}}},
       scales:{
-        x:{stacked:true, grid:{display:false}, ticks:{font:{size:9}}},
+        x:{stacked:true, grid:{display:false},
+           ticks:{font:{size:9}, autoSkip:true, maxRotation:0}},
         y:{stacked:true, beginAtZero:true, grid:{color:GRID}, ticks:{font:{size:9}},
            title:{display:true,text:'g proteina/dia',font:{size:9}}},
       }}

@@ -816,28 +816,43 @@ function renderHoy(){
                a las ${esc(siguiente.desde)}.` : ''}</div>
        </div>`;
 
+  /* Las tarjetas de agua y proteina son las MISMAS que en la pestana de
+     ingesta: tarjetaAgua y tarjetaProteina viven en app-ingesta.js, que carga
+     ANTES que este archivo. Se llaman en tiempo de ejecucion, con typeof por
+     si algun dia cambia el orden. Los vasos y el boton van dentro, en `extra`,
+     asi que desde Hoy se sigue registrando igual que siempre. */
   const vasos = Math.round(aguaHoyMl()/VASO_ML);
-  const agua = `
-    <div class="hoy-card">
-      <div class="hoy-hdr"><span>💧 Agua</span>
-        <span class="hoy-sub">${vasos} de ${VASOS_DIA} vasos</span></div>
-      <div class="hoy-vasos" id="hoy-agua">${
-        Array.from({length:VASOS_DIA}, (_,i) => i+1).map(n =>
-          `<button class="vaso${n <= vasos ? ' lleno' : ''}" onclick="tocarVaso(${n})"
-             aria-label="Vaso ${n}"></button>`).join('')}</div>
-    </div>`;
+  const vasosHTML = `
+    <div class="hoy-vasos" id="hoy-agua" style="margin-top:10px">${
+      Array.from({length:VASOS_DIA}, (_,i) => i+1).map(n =>
+        `<button class="vaso${n <= vasos ? ' lleno' : ''}" onclick="tocarVaso(${n})"
+           aria-label="Vaso ${n}"></button>`).join('')}</div>`;
+  const agua = (typeof tarjetaAgua === 'function')
+    ? tarjetaAgua({agua: aguaHoyMl(), periodo:'hoy',
+        pie:`${vasos} de ${VASOS_DIA} vasos`, extra: vasosHTML})
+    : `<div class="hoy-card">
+         <div class="hoy-hdr"><span>💧 Agua</span>
+           <span class="hoy-sub">${vasos} de ${VASOS_DIA} vasos</span></div>
+         ${vasosHTML}
+       </div>`;
 
   const p = protHoyG(), o = protObjetivo();
   const pct = Math.max(0, Math.min(100, Math.round(p/o.min*100)));
-  const prot = `
-    <div class="hoy-card">
-      <div class="hoy-hdr"><span>🍗 Proteína</span>
-        <span class="hoy-sub">${p} g de ${o.min}–${o.max}</span></div>
-      <div class="hoy-barra"><div class="hoy-barra-fill${p >= o.min ? ' ok' : ''}"
-        style="width:${pct}%"></div></div>
-      <button class="blk-btn" style="width:100%;margin-top:10px"
-        onclick="irAIngesta()">Registrar comida</button>
-    </div>`;
+  const botonComida = `<button class="blk-btn" style="width:100%;margin-top:10px"
+        onclick="irAIngesta()">Registrar comida</button>`;
+  /* Aqui p sale de la HOJA (protHoyG), no de la lista en pantalla: desde Hoy
+     no hay borrador que contar. Por eso puede ir por detras de lo que se ve en
+     la pestana de ingesta hasta que se pulse "Guardar dia". */
+  const prot = (typeof tarjetaProteina === 'function')
+    ? tarjetaProteina({prot:p, obj:o,
+        periodo:'hoy', pie:'Lo ya guardado en la hoja.', extra: botonComida})
+    : `<div class="hoy-card">
+         <div class="hoy-hdr"><span>🍗 Proteína</span>
+           <span class="hoy-sub">${p} g de ${o.min}–${o.max}</span></div>
+         <div class="hoy-barra"><div class="hoy-barra-fill${p >= o.min ? ' ok' : ''}"
+           style="width:${pct}%"></div></div>
+         ${botonComida}
+       </div>`;
 
   host.innerHTML = `
     <div class="hoy">
