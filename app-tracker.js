@@ -350,7 +350,26 @@ function attachDnD(){
 /* ================================================================
    MODAL: crear / editar / eliminar bloque
 ================================================================ */
-const BLK_COLORES = ['#7B5EA7','#E67E22','#2D6A4F','#2471A3','#C0392B','#16A085','#D4A017','#8E44AD','#34495E'];
+/* Diez tonos apagados, uno por familia de color, repartidos por toda la rueda
+   pero a la misma saturacion baja: se distinguen entre si sin que ninguno
+   grite. Todos aguantan texto blanco (3.6 a 5.1 de contraste), suficiente para
+   el titulo del bloque, que va en negrita.
+
+   La lista vieja tenia '#C0392B' rojo y '#D4A017' ambar. Esos dos colores YA
+   significan algo en esta app —bajo el suelo y ojo— y un bloque pintado de
+   rojo competia con esa senal. Ninguno de los diez se acerca a ellos. */
+const BLK_COLORES = [
+  '#8B7F9E',  // malva
+  '#61789A',  // pizarra
+  '#4E8481',  // verde azulado
+  '#6B8A6E',  // salvia
+  '#7E8455',  // oliva
+  '#A08447',  // ocre
+  '#A0654F',  // terracota
+  '#A0666F',  // rosa viejo
+  '#8E6480',  // ciruela
+  '#6B6F76',  // piedra
+];
 
 function abrirModalBloque(blkId){
   const esNuevo = !blkId;
@@ -395,7 +414,17 @@ function abrirModalBloque(blkId){
         <div class="blk-field">
           <label>Color</label>
           <div class="blk-colors" id="blk-f-colors">
-            ${BLK_COLORES.map(c=>`<div class="blk-color ${c===b.color?'sel':''}" style="background:${c}" data-color="${c}" onclick="pickColor(this)"></div>`).join('')}
+            ${paletaBloque(b.color).map(c=>`<div class="blk-color ${c===b.color?'sel':''}" style="background:${c}" data-color="${c}" onclick="pickColor(this)" title="${esc(c)}"></div>`).join('')}
+          </div>
+          <!-- Con tonos apagados la diferencia entre dos circulos de 26 px
+               cuesta verla; sobre la barra entera se aprecia enseguida. -->
+          <div id="blk-f-prev" style="display:flex;align-items:center;gap:9px;
+               padding:10px 13px;border-radius:9px;color:#fff;margin-top:9px;
+               background:${esc(b.color)}">
+            <span id="blk-f-prev-ico">${esc(b.icon)}</span>
+            <span id="blk-f-prev-lbl" style="flex:1;font-weight:700;font-size:.9rem">${
+              esc(b.label || 'Nombre del bloque')}</span>
+            <span style="font-size:.72rem;opacity:.85">${esc(b.desde||'--:--')}–${esc(b.hasta||'--:--')}</span>
           </div>
         </div>
       </div>
@@ -408,9 +437,19 @@ function abrirModalBloque(blkId){
   </div>`;
 }
 
+/* Los diez de siempre, y si el bloque ya tiene un color que no esta en la
+   lista —los que se pusieron con la paleta vieja— se anade delante para que
+   se vea cual esta puesto en vez de aparecer sin nada seleccionado. */
+function paletaBloque(actual){
+  return (actual && !BLK_COLORES.includes(actual))
+    ? [actual, ...BLK_COLORES] : BLK_COLORES.slice();
+}
+
 function pickColor(el){
   el.parentNode.querySelectorAll('.blk-color').forEach(c=>c.classList.remove('sel'));
   el.classList.add('sel');
+  const prev = document.getElementById('blk-f-prev');
+  if(prev) prev.style.background = el.dataset.color;
 }
 /* Un clic solo cierra si EMPEZO y TERMINO en el fondo. Sin esto, seleccionar
    texto de un campo arrastrando y soltar fuera del recuadro cerraba el modal.
