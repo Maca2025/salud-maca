@@ -301,6 +301,9 @@ async function arrancar(){
     renderComposicionKPIs();
     renderComposicionTables();
     loadSupsConfig();
+    // Hoy va DESPUES de loadSupsConfig: es quien llena BLOQUES y LAYOUT desde
+    // localStorage. Pintarla antes daba siempre "no toca ningun bloque".
+    renderHoy();
     document.getElementById('boot').classList.add('oculto');
     irADestino();
   } catch(e){

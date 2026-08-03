@@ -163,97 +163,6 @@ function stockDe(id){
   };
 }
 
-/* ────────────────────────────────────────────────────────────
-   INVENTARIO
-
-   Un renglón por ENVASE, no por suplemento: si dos filas comparten
-   frasco hay un solo bote que contar. Hoy ninguna lo comparte, pero
-   `envase_de` sigue aquí para cuando el calcio vuelva a partirse en
-   dos tomas — y entonces contarlo dos veces sería peor que no
-   contarlo, porque el número saldría al doble y parecería fiable.
-   ──────────────────────────────────────────────────────────── */
-
-/* Una cápsula tiene piezas; un líquido tiene mililitros y un polvo,
-   porciones. Decir "34 piezas" de la levotiroxina, que es líquida,
-   sería sencillamente falso. */
-const UNIDAD_FORMATO = {
-  'Líquido': ['ml', 'ml'],
-  'Polvo':   ['porción', 'porciones'],
-};
-function unidadTexto(s, n){
-  const par = UNIDAD_FORMATO[String((s && s.formato) || '').trim()] || ['pieza', 'piezas'];
-  return Math.abs(Number(n)) === 1 ? par[0] : par[1];
-}
-
-/* Días hasta lo primero malo que pueda pasar: quedarse sin envase o
-   que caduque. Infinity = no hay datos para saberlo. */
-function urgenciaInv(f){
-  const a = (f.dias    == null) ? Infinity : f.dias;
-  const b = (f.diasCad == null) ? Infinity : f.diasCad;
-  return Math.min(a, b);
-}
-
-function nivelInv(f){
-  const u = urgenciaInv(f);
-  if(u === Infinity) return 'sindato';
-  if(u <  0)  return 'caducado';
-  if(u <  7)  return 'rojo';
-  if(u < 14)  return 'ambar';
-  if(f.diasCad != null && f.diasCad <= 60) return 'ambar';
-  return 'ok';
-}
-
-/* Un renglón por envase, lo que urge primero arriba. */
-function inventario(){
-  const filas = [];
-  gruposDeEnvase(supsEnJuego()).forEach((sups, raizId) => {
-    const raiz = sups.find(x => x.id === raizId) || sups[0];
-    const cad  = caducidadDe(raiz);
-    const st   = stockDe(raiz.id);
-    const f = {
-      id: raiz.id, raiz, sups,
-      nombre: raiz.sustancia || raiz.id,
-      acompanan: sups.filter(x => x.id !== raiz.id).map(x => x.sustancia || x.id),
-      total:     unidadesDe(raiz),
-      contado:   fechaStockDe(raiz),
-      caducidad: cad,
-      diasCad:   diasParaCaducar(cad),
-      stock:     st,
-      dias:      st ? st.dias : null,
-      restantes: st ? st.restantes : null,
-      sinContar: !st,
-      // Lo que duraría tomándolo exactamente como está declarado. Es el
-      // número conservador: cuando hay días sin marcar, el cálculo por
-      // consumo real se va hacia arriba y este no se mueve. Se enseñan
-      // los dos en vez de elegir por ella cuál creer.
-      diasDecl: null,
-    };
-    const ritmoDecl = sups.reduce((tt, x) => tt + piezasDia(x), 0);
-    if(st && ritmoDecl > 0) f.diasDecl = Math.floor(st.restantes / ritmoDecl);
-    f.nivel = nivelInv(f);
-    filas.push(f);
-  });
-  // Sin el if explícito, Infinity - Infinity daría NaN y el orden
-  // de los que no tienen datos quedaría a merced del navegador.
-  filas.sort((a, b) => {
-    const ua = urgenciaInv(a), ub = urgenciaInv(b);
-    if(ua !== ub) return ua < ub ? -1 : 1;
-    return String(a.nombre).localeCompare(String(b.nombre), 'es');
-  });
-  return filas;
-}
-
-/* Fecha para el inventario: como el conteo puede ser de hace meses y
-   una caducidad puede caer en otro año, `fechaBonita` no sirve — se
-   come el año. */
-function fechaInv(iso){
-  if(!RE_FECHA.test(String(iso || ''))) return '';
-  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const [y, m, d] = iso.split('-').map(Number);
-  const esteAno = new Date().getFullYear();
-  return `${d} ${MESES[m-1]}${y === esteAno ? '' : ' ' + y}`;
-}
-
 /* Los suplementos que de verdad entran en los cálculos del día. */
 function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
 function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }
@@ -382,14 +291,21 @@ function initHome() {
   const calidad    = pesoFuera > 0 ? Math.round(grasaFuera/pesoFuera*100) : null;
   const ritmoG     = Math.abs(gRec.valida ? gRec.ratePerWeek : 0);
 
+  // Las dos metricas del objetivo nuevo, las mismas que la portada. Antes
+  // mostraba el SMM como "musculo" y el "% de lo perdido fue grasa", que
+  // contradicen el suelo de masa magra y la meta en porcentaje.
+  const mlgAct = +(last.peso - last.grasa).toFixed(1);
+  const suelo  = (typeof sueloMlg === 'function') ? sueloMlg() : 47;
+  const margen = +(mlgAct - suelo).toFixed(1);
   document.getElementById('hc-comp-metrics').innerHTML=`
     <div class="hc-metric"><span class="hc-dot" style="background:#e74c3c"></span>
-      Grasa: <strong>${last.grasa} kg</strong> · <strong style="color:#2d6a4f">−${grasaFuera} kg</strong> desde el inicio</div>
+      Grasa: <strong>${last.pbf.toFixed(1)} %</strong> · <strong style="color:#2d6a4f">−${grasaFuera} kg</strong> desde el inicio</div>
     <div class="hc-metric"><span class="hc-dot" style="background:#2980b9"></span>
-      Músculo: <strong>${last.smm} kg</strong> · <strong style="color:${musculoD>=0?'#15803d':'#b45309'}">${musculoD>=0?'+':''}${musculoD} kg</strong></div>
+      Masa magra: <strong>${mlgAct} kg</strong> · <strong style="color:${
+        margen<=0?'#b91c1c':(margen<=3?'#b45309':'#15803d')}">${
+        margen<=0?Math.abs(margen)+' kg bajo el suelo':'margen '+margen+' kg'}</strong></div>
     <div class="hc-metric"><span class="hc-dot" style="background:#2d6a4f"></span>
-      ${calidad!=null ? `<strong>${calidad}%</strong> de lo perdido fue grasa` : `Peso: ${last.peso} kg`}${
-        ritmoG>0.01 ? ` · ${ritmoG.toFixed(2)} kg grasa/sem` : ''}</div>`;
+      Peso: ${last.peso} kg${ritmoG>0.01 ? ` · ${ritmoG.toFixed(2)} kg grasa/sem` : ''}</div>`;
 
   // — Laboratorio —
   // Tolerante: si un marcador no está en la hoja, se omite en vez de romper.

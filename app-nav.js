@@ -120,7 +120,5 @@ function hidratar(d){
   INTERACCIONES = d.interacciones || [];
   STATUS_PANEL = d.estado || {controlados:[], vigilancia:[], pendientes:[]};
 
-  // Hoy se pinta al final: necesita BLOQUES, LAYOUT, SUPS, HIST e INGESTA ya listos
-  if(typeof renderHoy === 'function') renderHoy();
 }
 
