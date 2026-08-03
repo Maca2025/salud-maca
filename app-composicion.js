@@ -150,11 +150,17 @@ const plugMetas = {
       ctx.lineTo(chartArea.right, y);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = l.color;
+      /* A la IZQUIERDA y sobre un fondo claro. Pegados a la derecha se
+         montaban encima de las lineas justo donde convergen. */
       ctx.font = '600 10px system-ui, sans-serif';
-      ctx.textAlign = 'right';
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(l.texto, chartArea.right - 3, y - 3);
+      const x = chartArea.left + 4;
+      const w = ctx.measureText(l.texto).width;
+      ctx.fillStyle = 'rgba(255,255,255,.82)';
+      ctx.fillRect(x - 2, y - 14, w + 4, 12);
+      ctx.fillStyle = l.color;
+      ctx.fillText(l.texto, x, y - 3);
     });
     ctx.restore();
   }
@@ -191,11 +197,17 @@ function initRecomposicion(){
            texto:`objetivo grasa ${grasaMetaKg()} kg (${metaPbf()} %)`},
           {valor: sueloMlg(),    color:'#2980b9',
            texto:`objetivo masa magra ${sueloMlg()} kg`},
+          {valor: pesoMetaKg(),  color:'#9a9a94',
+           texto:`peso resultante ${pesoMetaKg()} kg`},
         ]},
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} kg`}}},
       scales:{
         x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}},
+        /* Las rayas de meta las pinta un plugin, no son series, asi que NO
+           arrastran la escala: sin esto el eje se quedaba en 40 y la meta de
+           grasa (20.1) caia fuera del area y no se dibujaba. */
         y:{grid:{color:GRID},ticks:{font:{size:9}},beginAtZero:false,
+           suggestedMin: Math.max(0, Math.floor(grasaMetaKg() - 5)),
            title:{display:true,text:'kg',font:{size:9}}},
       },
       elements:{point:{radius:3,hoverRadius:5}}}
@@ -289,6 +301,13 @@ function sueloMlg(){
 function grasaMetaKg(){
   const p = metaPbf();
   return +(sueloMlg() * p / (100 - p)).toFixed(1);
+}
+
+/* El peso objetivo NO se escribe en ningun sitio: es lo que sale de sumar las
+   otras dos. 47 de masa magra + 20.1 de grasa = 67.1 kg. Sigue siendo
+   consecuencia y no meta, por eso va en gris como la linea del peso. */
+function pesoMetaKg(){
+  return +(sueloMlg() + grasaMetaKg()).toFixed(1);
 }
 
 function tarjetaGrasa(){
