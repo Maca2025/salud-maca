@@ -81,7 +81,7 @@ function guardarBorradorLog(){
   try {
     localStorage.setItem(ING_KEY, JSON.stringify({
       fecha: hoyISO(),
-      items: _itemsHoy.map(it=>({a:it.alimento, g:it.g}))
+      items: _itemsHoy.map(it=>({a:it.alimento, g:it.g, gr:it.grupo}))
     }));
   } catch(e){}
 }
@@ -101,25 +101,79 @@ function firmaItems(items){
 }
 
 /* Reconstruye los items del día desde el texto guardado: "Huevo entero 100|Pollo 150" */
+/* Cada cosa registrada puede llevar delante la etiqueta del batido del que
+   salio: "#B1@0815 Dragon Whey proteína 30.5". Sin etiqueta es comida suelta,
+   que es como esta TODO lo registrado hasta ahora: el formato viejo sigue
+   leyendose igual y no hay que migrar nada. */
+const RE_GRUPO = /^(#B\d+@\d{4})\s+/;
+
 function parseDetalle(txt){
   return String(txt||'').split('|').map(s=>s.trim()).filter(Boolean).map(s=>{
+    let grupo = null;
+    const mg = s.match(RE_GRUPO);
+    if(mg){ grupo = mg[1]; s = s.slice(mg[0].length); }
     const m = s.match(/^(.*?)\s+([\d.]+)$/);
     const nombre = m ? m[1].trim() : s;
     const g = m ? parseFloat(m[2]) : 0;
-    return itemDe(nombre, g);
+    return itemDe(nombre, g, grupo);
   }).filter(Boolean);
 }
 
-function itemDe(nombre, g){
-  const a = buscarAlimento(nombre);
+function serializarDetalle(items){
+  return items.map(it =>
+    `${it.grupo ? it.grupo + ' ' : ''}${it.alimento} ${it.g}`).join('|');
+}
+
+/* Agrupa lo registrado hoy por batido. Devuelve [{tag, n, hora, items, prot, kcal}] */
+function batidosDeHoy(){
+  const mapa = new Map();
+  _itemsHoy.forEach(it=>{
+    if(!it.grupo) return;
+    if(!mapa.has(it.grupo)) mapa.set(it.grupo, []);
+    mapa.get(it.grupo).push(it);
+  });
+  return [...mapa.entries()].map(([tag, items])=>{
+    const m = tag.match(/^#B(\d+)@(\d{2})(\d{2})$/) || [];
+    return {tag, n: +(m[1]||0), hora: m[2] ? `${m[2]}:${m[3]}` : '',
+      items,
+      prot: Math.round(items.reduce((s,x)=>s+x.prot,0)),
+      kcal: Math.round(items.reduce((s,x)=>s+x.kcal,0))};
+  }).sort((a,b)=>a.n-b.n);
+}
+
+/* ════════════════════════════════════════════════════════════
+   EL BATIDO
+   ------------------------------------------------------------
+   Tres ingredientes del batido no estan —ni deben estar— en la tabla de
+   alimentos: la creatina y el myo-inositol son suplementos del Protocolo y el
+   cafe no aporta nada. Pero SI tienen que poder guardarse y volver a leerse,
+   o al recargar la pagina el batido perderia la mitad de su composicion.
+   Por eso viven aqui, con macros por 100 g como el resto, y itemDe los
+   consulta cuando buscarAlimento no encuentra nada.
+   Los valores: creatina 0 kcal · myo-inositol ~400 kcal/100 g (4 g = 16 kcal)
+   · cafe solo ~1 kcal/100 ml. A su escala son ruido, pero se cuentan. */
+const EXTRAS_BATIDO = {
+  'creatina':     {alimento:'Creatina',     kcal:0,   prot:0, origen:''},
+  'myo-inositol': {alimento:'Myo-inositol', kcal:400, prot:0, origen:''},
+  'cafe':         {alimento:'Café',         kcal:1,   prot:0, origen:''},
+  'café':         {alimento:'Café',         kcal:1,   prot:0, origen:''},
+};
+function extraBatido(nombre){
+  return EXTRAS_BATIDO[normalizar ? normalizar(nombre) : String(nombre).toLowerCase()]
+      || EXTRAS_BATIDO[String(nombre).toLowerCase()] || null;
+}
+
+function itemDe(nombre, g, grupo){
+  const a = buscarAlimento(nombre) || extraBatido(nombre);
   const f = g/100;
   return {
     alimento: a ? a.alimento : nombre,
     g,
     origen: a ? (a.origen||'') : '',
-    prot: a ? +(a.prot*f).toFixed(1) : 0,
-    kcal: a ? Math.round(a.kcal*f) : 0,
+    prot: a ? +((a.prot||0)*f).toFixed(1) : 0,
+    kcal: a ? Math.round((a.kcal||0)*f) : 0,
     desconocido: !a,
+    grupo: grupo || null,   // '#B1@0815' si vino de un batido
   };
 }
 
@@ -134,25 +188,32 @@ function totalesHoy(){
   return {pa:Math.round(pa), pv:Math.round(pv), kcal:Math.round(kcal), shakes};
 }
 
+/* Carga lo del dia UNA vez. Antes vivia dentro de renderIngestaHoy, pero la
+   tarjeta del batido escribe desde la pantalla Hoy sin haber abierto nunca la
+   pestana de ingesta: sin esto, _itemsHoy estaria vacio y guardar el batido
+   BORRARIA la comida del dia. */
+function asegurarLogDeHoy(){
+  if(_fechaLog === hoyISO()) return;
+  _fechaLog = hoyISO();
+  const y = ingestaDe(hoyISO());
+  const b = leerBorradorLog();
+  _itemsHoy = [];
+  // Base: lo que ya está en la hoja
+  if(y && y.detalle) {
+    _itemsHoy = parseDetalle(y.detalle);
+    _estadoLog = 'ok';            // lo que vino de la hoja ya está guardado
+  }
+  // Encima, el borrador local si trae más cosas (quedó sin guardar)
+  if(b && b.items && b.items.length > _itemsHoy.length){
+    _itemsHoy = b.items.map(x=>itemDe(x.a, x.g, x.gr));
+    _estadoLog = 'pend';          // el borrador traía cosas sin guardar
+  }
+}
+
 function renderIngestaHoy(){
   const cont = document.getElementById('ingesta-hoy');
   if(!cont) return;
-  // Solo se hidrata una vez por día: después manda lo que hay en pantalla
-  if(_fechaLog !== hoyISO()){
-    _fechaLog = hoyISO();
-    const y = ingestaDe(hoyISO());
-    const b = leerBorradorLog();
-    // Base: lo que ya está en la hoja
-    if(y && y.detalle) {
-      _itemsHoy = parseDetalle(y.detalle);
-      _estadoLog = 'ok';            // lo que vino de la hoja ya está guardado
-    }
-    // Encima, el borrador local si trae más cosas (quedó sin guardar)
-    if(b && b.items && b.items.length > _itemsHoy.length){
-      _itemsHoy = b.items.map(x=>itemDe(x.a, x.g));
-      _estadoLog = 'pend';          // el borrador traía cosas sin guardar
-    }
-  }
+  asegurarLogDeHoy();
   const t = totalesHoy();
   const aguaMl = aguaLog();
   const vasos = Math.round(aguaMl/250);
@@ -230,6 +291,174 @@ async function setAgua(ml){
     if(caja) caja.style.opacity = '1';
     alert('No se pudo guardar el agua: ' + e.message);
   }
+}
+
+/* ════════════════════════════════════════════════════════════
+   TARJETA DEL BATIDO
+   ------------------------------------------------------------
+   Un batido puede llevar de todo y cambiar cada vez, asi que en vez de un
+   alimento fijo se marca lo que lleva y la app calcula. Escribe en DOS sitios
+   de un solo toque:
+     - polvo, leche, fruta, agua y cafe -> el registro de comida del dia;
+     - creatina e inositol -> el tracker del Protocolo, en modo merge.
+   Asi no hay doble captura, que es justo lo que se queria evitar.
+
+   El AGUA del batido NO suma un vaso al conteo de hidratacion: los vasos los
+   marca ella. Se guarda como ingrediente (0 kcal) solo para saber como estaba
+   preparado. Decision suya, 3-ago.
+   ════════════════════════════════════════════════════════════ */
+const BATIDO_ING = [
+  {k:'polvo',    label:'Polvo de proteína', alimento:'Dragon Whey proteína', g:30.5, paso:15.25, unidad:'medida'},
+  {k:'creatina', label:'Creatina',          alimento:'Creatina',     g:5,   paso:5,   unidad:'g', sup:'creatina'},
+  {k:'inositol', label:'Myo-inositol',      alimento:'Myo-inositol', g:4,   paso:4,   unidad:'g', sup:'inositol'},
+  {k:'leche',    label:'Leche',             alimento:'Leche semidescremada', g:240, paso:120, unidad:'ml'},
+  {k:'agua',     label:'Agua',              alimento:'Agua',         g:250, paso:250, unidad:'ml'},
+  {k:'cafe',     label:'Café',              alimento:'Café',         g:240, paso:120, unidad:'ml'},
+];
+const BATIDO_FRUTAS = ['Plátano','Fresas','Mora azul','Manzana'];
+
+/* En linea a proposito: son cinco piezas de un solo formulario y asi el
+   despliegue no arrastra estilos.css. Si algun dia hacen falta en mas sitios,
+   se mudan a la hoja. */
+const BAT_CSS = {
+  fila:  'display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid #f0f0ed',
+  cant:  'display:flex;align-items:center;gap:7px;font-size:.78rem;color:#666;white-space:nowrap',
+  paso:  'width:24px;height:24px;border-radius:7px;border:1px solid #e0e0dd;background:#fff;font-size:.9rem;line-height:1;color:#1b4332',
+  frutas:'display:flex;gap:6px;flex-wrap:wrap;padding:2px 0 9px 26px',
+  fruta: 'font-size:.76rem;padding:4px 11px;border-radius:13px;border:1px solid #e8e8e6;background:#fff;color:#666',
+  frutaOn:'font-size:.76rem;padding:4px 11px;border-radius:13px;border:1px solid #86efac;background:#f0fdf4;color:#15803d;font-weight:700',
+};
+
+let _bat = null;   // seleccion del formulario abierto
+
+function abrirFormBatido(){
+  asegurarLogDeHoy();
+  _bat = {polvo:true, creatina:false, inositol:false, leche:false,
+          agua:false, cafe:false, fruta:null, g:{}};
+  BATIDO_ING.forEach(i=>{ _bat.g[i.k] = i.g; });
+  pintarFormBatido();
+}
+
+function togBatido(k){
+  _bat[k] = !_bat[k];
+  pintarFormBatido();
+}
+function ajustarBatido(k, signo){
+  const ing = BATIDO_ING.find(i=>i.k===k);
+  if(!ing) return;
+  _bat.g[k] = Math.max(ing.paso, +(_bat.g[k] + signo*ing.paso).toFixed(2));
+  pintarFormBatido();
+}
+function ponerFruta(nombre){
+  _bat.fruta = (_bat.fruta === nombre) ? null : nombre;
+  pintarFormBatido();
+}
+
+/* Los items que produciria la seleccion actual, sin escribir nada. */
+function itemsDelBatido(sel){
+  const out = [];
+  BATIDO_ING.forEach(i=>{
+    if(sel[i.k]) out.push(itemDe(i.alimento, sel.g[i.k]));
+  });
+  if(sel.fruta){
+    const a = buscarAlimento(sel.fruta);
+    out.push(itemDe(sel.fruta, a ? a.porcion : 100));
+  }
+  return out;
+}
+
+function pintarFormBatido(){
+  const items = itemsDelBatido(_bat);
+  const prot = Math.round(items.reduce((s,x)=>s+x.prot,0));
+  const kcal = Math.round(items.reduce((s,x)=>s+x.kcal,0));
+  const sups = BATIDO_ING.filter(i=>i.sup && _bat[i.k]).map(i=>i.label);
+
+  const filas = BATIDO_ING.map(i=>{
+    const on = !!_bat[i.k];
+    const cant = i.k==='polvo'
+      ? `${+(_bat.g[i.k]/30.5).toFixed(2)} ${i.unidad}${_bat.g[i.k]>30.5?'s':''}`
+      : `${_bat.g[i.k]} ${i.unidad}`;
+    return `<div style="${BAT_CSS.fila}">
+      <label class="ing-check" style="flex:1;margin:0">
+        <input type="checkbox" ${on?'checked':''} onchange="togBatido('${i.k}')">
+        <span>${esc(i.label)}</span>
+      </label>
+      ${on ? `<span style="${BAT_CSS.cant}">
+        <button style="${BAT_CSS.paso}" onclick="ajustarBatido('${i.k}',-1)" aria-label="Menos">−</button>
+        ${esc(cant)}
+        <button style="${BAT_CSS.paso}" onclick="ajustarBatido('${i.k}',1)" aria-label="Más">+</button>
+      </span>` : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal" style="max-width:430px">
+      <div class="blk-modal-hdr"><span>🥤 Preparar batido</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        ${filas}
+        <div style="${BAT_CSS.fila};border-bottom:none">
+          <label class="ing-check" style="flex:1;margin:0">
+            <input type="checkbox" ${_bat.fruta?'checked':''}
+              onchange="ponerFruta(this.checked ? '${esc(BATIDO_FRUTAS[0])}' : null)">
+            <span>Fruta</span>
+          </label>
+        </div>
+        ${_bat.fruta ? `<div style="${BAT_CSS.frutas}">${BATIDO_FRUTAS.map(f=>
+          `<button style="${f===_bat.fruta?BAT_CSS.frutaOn:BAT_CSS.fruta}"
+            onclick="ponerFruta('${esc(f)}')">${esc(f)}</button>`).join('')}</div>` : ''}
+
+        <div class="lt-sub" style="justify-content:flex-start;margin-top:14px">
+          <span class="lt-an">${prot} g proteína</span>
+          <span class="lt-kc">${kcal} kcal</span>
+          ${sups.length ? `<span class="lt-ve">${esc(sups.join(' y '))} al Protocolo</span>` : ''}
+        </div>
+        <div id="bat-msg"></div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Cancelar</button>
+        <button class="blk-btn primary" id="bat-guardar" onclick="guardarBatido()"
+          ${items.length ? '' : 'disabled'}>Añadir al día</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function guardarBatido(){
+  const items = itemsDelBatido(_bat);
+  if(!items.length) return;
+  const btn = document.getElementById('bat-guardar');
+  if(btn){ btn.disabled = true; btn.textContent = 'Añadiendo…'; }
+
+  asegurarLogDeHoy();
+  /* El numero del batido sale del mayor que ya haya hoy, no del total: si
+     borra el primero, el segundo sigue siendo el 2 y no se solapan. */
+  const previos = batidosDeHoy();
+  const n = previos.length ? Math.max(...previos.map(b=>b.n)) + 1 : 1;
+  const tag = `#B${n}@${horaAhora().replace(':','')}`;
+  items.forEach(it => { it.grupo = tag; _itemsHoy.push(it); });
+  marcarCambio();          // guarda el dia solo, con el retardo de siempre
+  renderIngestaHoy();
+
+  /* Los suplementos van aparte, en merge: solo suman y nunca borran. */
+  const ids = BATIDO_ING.filter(i=>i.sup && _bat[i.k]).map(i=>i.sup);
+  if(ids.length){
+    try {
+      await api({action:'save', fecha:hoyISO(), hora:horaAhora(),
+                 tomados:ids.join(','), todos:ids.join(','), modo:'merge'});
+      let d = (HIST || []).find(h => h.fecha === hoyISO());
+      if(!d){ d = {fecha:hoyISO(), hora:horaAhora(), tomas:{}, nota:''}; HIST.unshift(d); }
+      ids.forEach(id => { d.tomas[id] = true; });
+    } catch(e){
+      alert('El batido se guardó, pero no se pudo marcar en el Protocolo: ' + e.message +
+            '\n\nMárcalo a mano en Suplementos.');
+    }
+  }
+
+  cerrarForm();
+  if(typeof renderHoy === 'function') renderHoy();
+  renderIngestaResumen();
 }
 
 /* ── Dictado: usa el reconocimiento del navegador y luego Gemini ── */
@@ -487,7 +716,7 @@ async function guardarLog(){
   }
 
   const t = totalesHoy();
-  const detalle = _itemsHoy.map(it=>`${it.alimento} ${it.g}`).join('|');
+  const detalle = serializarDetalle(_itemsHoy);
 
   // Sin `agua`: la escribe setAgua en el acto y guardarIngesta conserva lo que
   // no se le manda. Mandarla desde aqui era lo que borraba los vasos de Hoy.

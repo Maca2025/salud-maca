@@ -739,6 +739,35 @@ async function tocarVaso(n){
   }
 }
 
+/* Los batidos del dia. La composicion de cada uno sale de las etiquetas
+   #B<n>@<hora> que guarda el registro de comida, asi que aqui no se guarda
+   nada aparte: es la misma verdad, leida distinto. */
+function tarjetaBatido(){
+  const hay = typeof batidosDeHoy === 'function';
+  if(hay && typeof asegurarLogDeHoy === 'function') asegurarLogDeHoy();
+  const lista = hay ? batidosDeHoy() : [];
+  const prot = lista.reduce((s,b)=>s+b.prot, 0);
+
+  const filas = lista.map(b=>`
+    <div class="hoy-sub" style="display:flex;gap:8px;padding:5px 0;
+         border-bottom:1px solid #f5f5f2">
+      <span style="color:#aaa;min-width:38px">${esc(b.hora)}</span>
+      <span style="flex:1">${b.items.map(i=>esc(i.alimento)).join(' · ')}</span>
+      <span style="color:#1b4332;font-weight:700">${b.prot} g</span>
+    </div>`).join('');
+
+  return `
+    <div class="hoy-card">
+      <div class="hoy-hdr"><span>🥤 Batido</span>
+        <span class="hoy-sub">${lista.length
+          ? `${lista.length} ${lista.length===1?'batido':'batidos'} · ${prot} g`
+          : 'ninguno hoy'}</span></div>
+      ${filas}
+      <button class="blk-btn" style="width:100%;margin-top:10px"
+        onclick="abrirFormBatido()">＋ Preparar batido</button>
+    </div>`;
+}
+
 /* La linea de estado: las tres cosas que se mueven juntas, en una frase.
    Esta es la parte "holistica" — no cinco tarjetas de cinco secciones. */
 function lineaEstado(){
@@ -869,7 +898,7 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      ${agua}${prot}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
+      ${agua}${prot}${tarjetaBatido()}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
     </div>`;
 }
 
