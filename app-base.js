@@ -259,13 +259,23 @@ function regresion(campo, desde){
    renderStock en app-editar.js pisara a esta —se declara despues— y el parche
    se retira solo.
    ════════════════════════════════════════════════════════════ */
-let _avisoStock = false;
-function renderStock(){
-  if(!_avisoStock){
-    _avisoStock = true;
-    console.info('renderStock: la Fase 2 (inventario) no esta construida; se ignora.');
-  }
-}
+/* Van juntas y en una lista para que anadir la siguiente sea una palabra:
+   renderStock lo llama initSuplementos (app-editar.js) y renderAvisoStock lo
+   llama cargarRegistro (app-registro.js). Si aparece otra huerfana, se mete
+   aqui y ya. */
+const HUECOS_FASE2 = ['renderStock', 'renderAvisoStock'];
+const _avisadoFase2 = {};
+HUECOS_FASE2.forEach(nombre => {
+  if(typeof window !== 'undefined' && typeof window[nombre] === 'function') return;
+  const fn = function(){
+    if(!_avisadoFase2[nombre]){
+      _avisadoFase2[nombre] = true;
+      console.info(nombre + ': la Fase 2 (inventario) no esta construida; se ignora.');
+    }
+  };
+  if(typeof window !== 'undefined') window[nombre] = fn;
+  else this[nombre] = fn;
+});
 
 /* ════════════════════════════════════════════════════════════
    RECOMPOSICION Y CALIDAD
