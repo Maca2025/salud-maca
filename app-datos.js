@@ -56,6 +56,10 @@ let VERSION_API = '';
 
 /* Medidas con cinta. Viven en su propia hoja porque su cadencia es otra
    (cada 2-4 semanas) y porque miden algo que la bioimpedancia no puede. */
+/* El historial de tomas ya viajaba en leerTodo y se descartaba: la
+   pantalla Hoy necesita saber que hay marcado sin pedirlo otra vez. */
+let HIST = [];
+
 let PERIM = [];
 let ALTURA_CM = 163;
 let SD = {}, SR = {}, SSECTIONS = [], SUPS = [];

@@ -232,7 +232,6 @@ function renderHorario() {
   attachDnD();
   renderPendientes();
   renderConflictos();
-  renderAvisoStock();
 }
 
 function toggleTracker(id, cb) {
@@ -579,121 +578,6 @@ function renderCostos(){
     </div>`;
 }
 
-/* ════════════════════════════════════════════════════════════
-   INVENTARIO — LA TARJETA DE PROTOCOLO
-
-   El número grande son los DÍAS que quedan, no las piezas: las
-   piezas las contaste tú y ya las sabes; los días son los que te
-   dicen si hay que salir a comprar.
-
-   El cálculo descuenta por lo REGISTRADO. Un día que tomaste sin
-   marcar no se descuenta, así que el número va optimista — siempre
-   en la dirección de "tranquila, te queda de sobra", que es la peor.
-   Por eso cada fila avisa cuando es aproximado en vez de callarse.
-   ════════════════════════════════════════════════════════════ */
-function renderStock(){
-  const cont = document.getElementById('sups-stock');
-  if(!cont) return;
-
-  const filas      = inventario();
-  const porComprar = SUPS.filter(supPorComprar);
-  const cab = `<div class="inv-head">
-      <span>📦 Inventario</span>
-      <button class="inv-btn" onclick="abrirInventario()">Hacer inventario</button>
-    </div>`;
-  const notaCompra = porComprar.length ? `<div class="inv-nota">
-      ${porComprar.length === 1 ? 'Uno está' : porComprar.length + ' están'} marcados por comprar
-      y no salen aquí: ${porComprar.map(s => esc(s.sustancia || s.id)).join(' · ')}.
-    </div>` : '';
-
-  if(!filas.length){ cont.innerHTML = ''; return; }
-
-  const contados  = filas.filter(f => !f.sinContar);
-  const sinContar = filas.filter(f =>  f.sinContar);
-
-  if(!contados.length){
-    cont.innerHTML = `<div class="inv-box">${cab}
-      <div class="inv-vacio">Todavía no has contado ningún envase. Dale a
-        <strong>Hacer inventario</strong> y apunta lo que tengas: lo que dejes en
-        blanco simplemente no se calcula.</div>${notaCompra}</div>`;
-    return;
-  }
-
-  // Sin el historial cargado, el consumo sale cero y todos los botes
-  // parecerían llenos. Decirlo es mejor que enseñar el número malo.
-  const esperando = !_histListo;
-
-  const urgentes = contados.filter(f => f.nivel === 'rojo' || f.nivel === 'caducado');
-  const hayAprox = contados.some(f => f.stock && (f.stock.estimado || f.stock.cobertura < 70));
-
-  cont.innerHTML = `<div class="inv-box">${cab}
-    ${esperando ? `<div class="inv-espera">⏳ Cargando tu historial para calcular el consumo.
-      Hasta que llegue, los días que ves se quedan cortos de descontar.</div>` : ''}
-    ${urgentes.length ? `<div class="inv-urgente">🛒 Toca reponer:
-      <strong>${urgentes.map(f => esc(f.nombre)).join(' · ')}</strong></div>` : ''}
-    <div class="inv-lista">${contados.map(filaInv_).join('')}</div>
-    ${sinContar.length ? `<div class="inv-nota">Sin contar todavía:
-      <strong>${sinContar.map(f => esc(f.nombre)).join(' · ')}</strong>.</div>` : ''}
-    ${hayAprox ? `<div class="inv-nota">Las filas marcadas <em>aproximado</em> son las que llevan
-      poco tiempo desde el conteo o tienen días sin registrar: ahí el número va optimista,
-      porque un día que tomaste sin marcar no se descuenta.</div>` : ''}
-    ${notaCompra}
-  </div>`;
-}
-
-function filaInv_(f){
-  const st      = f.stock;
-  const aprox   = st.estimado || st.cobertura < 70;
-  const d       = f.dias;
-  const vencido = f.diasCad != null && f.diasCad < 0;
-  // Cuando el consumo registrado va corto, el número grande se infla.
-  // Enseñar también el conservador es más útil que esconder cualquiera
-  // de los dos: la diferencia son justo los días que no marcaste.
-  const conserv = (aprox && f.diasDecl != null && f.diasDecl < d)
-    ? ` · si no te saltas ninguno, ${f.diasDecl} ${f.diasDecl === 1 ? 'día' : 'días'}` : '';
-  const cad   = f.caducidad ? (
-      f.diasCad <  0 ? `<span class="inv-cad vencida">🔴 caducó hace ${-f.diasCad} ${-f.diasCad === 1 ? 'día' : 'días'}</span>`
-    : f.diasCad <= 60 ? `<span class="inv-cad pronto">⏳ caduca en ${f.diasCad} ${f.diasCad === 1 ? 'día' : 'días'}</span>`
-    :                   `<span class="inv-cad">caduca el ${fechaInv(f.caducidad)}</span>`) : '';
-
-  return `<div class="inv-fila nivel-${f.nivel}">
-    <div class="inv-dias">
-      ${vencido
-        ? `<strong>✕</strong><span>caducado</span>`
-        : `<strong>${d == null ? '—' : d}</strong>
-           <span>${d == null ? 'sin ritmo' : (d === 1 ? 'día' : 'días')}</span>`}
-    </div>
-    <div class="inv-datos">
-      <div class="inv-nombre">${esc(f.nombre)}${f.acompanan.length
-        ? ` <span class="inv-comparte">+ ${f.acompanan.map(esc).join(' + ')}, mismo envase</span>` : ''}</div>
-      <div class="inv-sub">${st.restantes}${f.total ? ' de ' + f.total : ''}
-        ${unidadTexto(f.raiz, st.restantes)} · contado el ${fechaInv(f.contado)}${
-        aprox ? ' · <em>aproximado</em>' : ''}${conserv}</div>
-      ${cad ? `<div class="inv-cadline">${cad}</div>` : ''}
-    </div>
-  </div>`;
-}
-
-/* La franja del tracker. A las seis de la mañana no debe estorbar:
-   si no hay nada urgente, no aparece nada. */
-function renderAvisoStock(){
-  const cont = document.getElementById('aviso-stock');
-  if(!cont) return;
-  if(fechaActiva !== hoyISO()){ cont.innerHTML = ''; return; }
-
-  const filas = inventario().filter(f =>
-    f.nivel === 'rojo' || f.nivel === 'ambar' || f.nivel === 'caducado');
-  if(!filas.length){ cont.innerHTML = ''; return; }
-
-  cont.innerHTML = `<div class="inv-aviso">${filas.map(f => {
-    if(f.diasCad != null && f.diasCad < 0)
-      return `<span class="inv-avchip vencida">🔴 ${esc(f.nombre)} caducó</span>`;
-    if(f.dias != null && f.dias < 14)
-      return `<span class="inv-avchip ${f.dias < 7 ? 'rojo' : ''}">📦 ${esc(f.nombre)} · ${f.dias} ${f.dias === 1 ? 'día' : 'días'}</span>`;
-    return `<span class="inv-avchip">⏳ ${esc(f.nombre)} caduca en ${f.diasCad} días</span>`;
-  }).join('')}</div>`;
-}
-
 /* Etiqueta de cada interacción según si el horario la resuelve.
    Es la misma clasificación que usa detectarConflictos() para decidir
    si avisa o no; mostrarla aquí evita que un aviso ausente parezca
@@ -728,3 +612,218 @@ function renderInteracciones() {
   container.innerHTML = html;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   HOY — la pantalla de inicio
+   ---------------------------------------------------------------
+   La app estaba organizada por tipo de dato: composicion, laboratorio,
+   nutricion, suplementos, fotos. Esa es la estructura de la hoja de
+   calculo, no la del dia. "Hoy" junta lo que se HACE, cada cosa a un
+   toque, y deja las secciones debajo para lo que se REVISA.
+
+   El principio: que la app pida menos disciplina, no que ayude a tener
+   mas. Si algo cuesta tres toques, no se hace.
+
+   POR QUE ESTO NO REUTILIZA toggleTracker NI guardarDia
+   Las casillas del tracker solo marcan en memoria: lo que escribe en la
+   hoja es el boton "Guardar dia". Desde aqui eso no sirve — marcarias y
+   no se guardaria nada. Y guardarDia() depende de `fechaActiva`, que
+   puede estar en un dia pasado, y puede sacar confirmaciones.
+
+   Por eso Hoy guarda por su cuenta y SIEMPRE en modo merge, que el
+   servidor ya soporta: merge solo agrega tomas y nunca convierte un 1
+   en 0. Consecuencia deliberada: desde Hoy se puede marcar pero no
+   desmarcar. Es lo que hace imposible que un toque por error borre lo
+   del dia; para corregir se va al tracker.
+   ═══════════════════════════════════════════════════════════════ */
+const VASO_ML   = 250;
+const VASOS_DIA = 8;
+const PROT_MIN  = 1.2;   // g por kg de peso
+const PROT_MAX  = 1.6;
+
+/* Calculo propio del bloque activo, sin depender de `fechaActiva`: el
+   tracker puede estar mirando un dia pasado y la portada habla de HOY. */
+function bloqueAhora(){
+  const ahora = new Date();
+  const min = ahora.getHours()*60 + ahora.getMinutes();
+  const aMin = h => { const t = String(h||'').split(':').map(Number); return t[0]*60 + (t[1]||0); };
+  const lista = (BLOQUES||[]).filter(b => b.desde).slice()
+                  .sort((a,b) => aMin(a.desde) - aMin(b.desde));
+  if(!lista.length) return {actual:null, siguiente:null};
+
+  let actual = null, siguiente = null;
+  for(const b of lista){
+    const ini = aMin(b.desde), fin = b.hasta ? aMin(b.hasta) : ini + 60;
+    if(min >= ini && min <= fin){ actual = b; continue; }
+    if(min < ini && !siguiente) siguiente = b;
+  }
+  if(!actual && !siguiente) siguiente = lista[0];   // ya no queda nada hoy
+  return {actual, siguiente};
+}
+
+function supsDeBloque(b){
+  if(!b) return [];
+  return idsEnJuego(LAYOUT[b.id] || []).map(supById).filter(Boolean);
+}
+
+function tomasDeHoy(){
+  const d = (HIST || []).find(h => h.fecha === hoyISO());
+  return d ? (d.tomas || {}) : {};
+}
+
+function aguaHoyMl(){ const d = ingestaDe(hoyISO()); return d ? (d.agua || 0) : 0; }
+
+function protHoyG(){
+  const d = ingestaDe(hoyISO());
+  return d ? Math.round((d.prot_animal || 0) + (d.prot_vegetal || 0)) : 0;
+}
+
+function protObjetivo(){
+  const last = DATA.length ? DATA[DATA.length-1] : null;
+  const kg = last ? last.peso : 100;
+  return {min: Math.round(kg*PROT_MIN), max: Math.round(kg*PROT_MAX)};
+}
+
+/* Marca un suplemento y lo guarda en el acto. Merge: solo suma. */
+async function tocarSup(id, cb){
+  if(!cb.checked){
+    cb.checked = true;
+    alert('Desde aquí solo se puede marcar, nunca desmarcar.\n\n' +
+          'Es lo que hace imposible que un toque por error borre lo del día. ' +
+          'Para corregir, ve a Suplementos → Horario & Tracker.');
+    return;
+  }
+  cb.disabled = true;
+  try {
+    await api({action:'save', fecha:hoyISO(), hora:horaAhora(),
+               tomados:id, todos:id, modo:'merge'});
+    // Se refleja en memoria sin recargarlo todo: la hoja ya tiene la verdad.
+    let d = (HIST || []).find(h => h.fecha === hoyISO());
+    if(!d){ d = {fecha:hoyISO(), hora:horaAhora(), tomas:{}, nota:''}; HIST.unshift(d); }
+    d.tomas[id] = true;
+    if(typeof trackerState === 'object') trackerState[id] = true;
+    renderHoy();
+  } catch(e){
+    cb.checked = false; cb.disabled = false;
+    alert('No se pudo guardar: ' + e.message);
+  }
+}
+
+/* Un toque suma un vaso; volver a tocar el ultimo lo quita.
+   Se manda SOLO el agua: guardarIngesta conserva lo que no se le envia,
+   asi que esto no puede pisar la comida ya registrada. */
+async function tocarVaso(n){
+  const actual = Math.round(aguaHoyMl()/VASO_ML);
+  const ml = Math.max(0, (n === actual ? n-1 : n) * VASO_ML);
+  const host = document.getElementById('hoy-agua');
+  if(host) host.style.opacity = '.5';
+  try {
+    await api({action:'guardarIngesta', fecha:hoyISO(), agua:ml});
+    let d = ingestaDe(hoyISO());
+    if(!d){ d = {fecha:hoyISO(), prot_animal:0, prot_vegetal:0, agua:0}; INGESTA.push(d); }
+    d.agua = ml;
+    renderHoy();
+  } catch(e){
+    if(host) host.style.opacity = '1';
+    alert('No se pudo guardar el agua: ' + e.message);
+  }
+}
+
+/* La linea de estado: las tres cosas que se mueven juntas, en una frase.
+   Esta es la parte "holistica" — no cinco tarjetas de cinco secciones. */
+function lineaEstado(){
+  const last = DATA.length ? DATA[DATA.length-1] : null;
+  if(!last) return 'Sin mediciones todavía.';
+  const partes = [];
+
+  const g = regresion('grasa', 6);
+  if(g.valida && g.ratePerWeek < -0.05)      partes.push('grasa bajando');
+  else if(g.valida && g.ratePerWeek > 0.05)  partes.push('grasa subiendo');
+  else                                       partes.push('grasa estable');
+
+  const v = variacionMagra();
+  partes.push(v ? ('masa magra ' + (v.estable ? 'estable' : 'bajando rápido'))
+                : 'masa magra sin lectura');
+
+  const margen = +(mlgDe(last) - sueloMlg()).toFixed(1);
+  if(margen <= 0) partes.push('por debajo del suelo de ' + sueloMlg() + ' kg');
+
+  return partes.join(' · ');
+}
+
+function fechaLarga(){
+  const D = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const M = ['enero','febrero','marzo','abril','mayo','junio','julio',
+             'agosto','septiembre','octubre','noviembre','diciembre'];
+  const f = new Date();
+  return `${D[f.getDay()]} ${f.getDate()} de ${M[f.getMonth()]}`;
+}
+
+function renderHoy(){
+  const host = document.getElementById('hoy-host');
+  if(!host) return;
+
+  const par = bloqueAhora(), actual = par.actual, siguiente = par.siguiente;
+  const sups = supsDeBloque(actual);
+  const tomas = tomasDeHoy();
+
+  const listaSups = sups.map(s => {
+    const hecho = tomas[s.id] === true;
+    return `<label class="${hecho ? 'hecho' : ''}">
+      <input type="checkbox" ${hecho ? 'checked' : ''}
+        onchange="tocarSup('${esc(s.id)}',this)">
+      <span><strong>${esc(s.sustancia || s.id)}</strong>
+        ${s.dosis ? `<em>${esc(s.dosis)}</em>` : ''}</span></label>`;
+  }).join('');
+
+  const bloque = actual
+    ? `<div class="hoy-card">
+         <div class="hoy-hdr">
+           <span>${esc(actual.icon || '')} ${esc(actual.label || actual.id)} ·
+             ${esc(actual.desde)}–${esc(actual.hasta || '')}</span>
+           <span class="hoy-chip">ahora</span>
+         </div>
+         ${sups.length ? `<div class="hoy-sups">${listaSups}</div>`
+                       : '<div class="hoy-sub">Nada asignado a este bloque.</div>'}
+         ${siguiente ? `<div class="hoy-sub">Después: ${esc(siguiente.label || siguiente.id)}
+             a las ${esc(siguiente.desde)}</div>` : ''}
+       </div>`
+    : `<div class="hoy-card">
+         <div class="hoy-hdr"><span>💊 Suplementos</span></div>
+         <div class="hoy-sub">Ahora no toca ningún bloque.${siguiente
+           ? ` El siguiente es <strong>${esc(siguiente.label || siguiente.id)}</strong>
+               a las ${esc(siguiente.desde)}.` : ''}</div>
+       </div>`;
+
+  const vasos = Math.round(aguaHoyMl()/VASO_ML);
+  const agua = `
+    <div class="hoy-card">
+      <div class="hoy-hdr"><span>💧 Agua</span>
+        <span class="hoy-sub">${vasos} de ${VASOS_DIA} vasos</span></div>
+      <div class="hoy-vasos" id="hoy-agua">${
+        Array.from({length:VASOS_DIA}, (_,i) => i+1).map(n =>
+          `<button class="vaso${n <= vasos ? ' lleno' : ''}" onclick="tocarVaso(${n})"
+             aria-label="Vaso ${n}"></button>`).join('')}</div>
+    </div>`;
+
+  const p = protHoyG(), o = protObjetivo();
+  const pct = Math.max(0, Math.min(100, Math.round(p/o.min*100)));
+  const prot = `
+    <div class="hoy-card">
+      <div class="hoy-hdr"><span>🍗 Proteína</span>
+        <span class="hoy-sub">${p} g de ${o.min}–${o.max}</span></div>
+      <div class="hoy-barra"><div class="hoy-barra-fill${p >= o.min ? ' ok' : ''}"
+        style="width:${pct}%"></div></div>
+      <button class="blk-btn" style="width:100%;margin-top:10px"
+        onclick="gotoSection('planes')">Registrar comida</button>
+    </div>`;
+
+  host.innerHTML = `
+    <div class="hoy">
+      <div class="hoy-top">
+        <div class="hoy-top-fila"><span class="hoy-titulo">Hoy</span>
+          <span class="hoy-fecha">${fechaLarga()}</span></div>
+        <div class="hoy-estado">${lineaEstado()}</div>
+      </div>
+      ${bloque}${agua}${prot}
+    </div>`;
+}

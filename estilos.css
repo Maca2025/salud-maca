@@ -1195,3 +1195,45 @@ tr.recomp-win td{background:#f0fdf4;}
   border:1px solid #e2eee7;border-radius:10px;padding:11px 15px;}
 .proyeccion strong{color:#1b4332;}
 .proyeccion .pc-sub{display:block;margin-top:3px;font-size:.74rem;}
+
+/* ══════════════════════════════════════════════════════════
+   CSS MODULE: HOY
+   La pantalla de inicio. Botones grandes: se usa con una mano
+   a las seis de la mañana.
+   ══════════════════════════════════════════════════════════ */
+.hoy{display:flex;flex-direction:column;gap:11px;margin-bottom:20px;}
+.hoy-top{background:#1b4332;border-radius:12px;padding:13px 16px;}
+.hoy-top-fila{display:flex;justify-content:space-between;align-items:baseline;}
+.hoy-titulo{font-size:1.05rem;font-weight:800;color:#fff;}
+.hoy-fecha{font-size:.78rem;color:#b7e4c7;}
+.hoy-estado{font-size:.78rem;color:#d8f3dc;margin-top:5px;line-height:1.5;}
+
+.hoy-card{background:#fff;border:1px solid #e8e8e6;border-radius:12px;padding:13px 15px;}
+.hoy-hdr{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  font-size:.8rem;font-weight:700;color:#1b4332;margin-bottom:9px;}
+.hoy-sub{font-size:.74rem;color:#888;font-weight:600;line-height:1.5;}
+.hoy-chip{font-size:.66rem;font-weight:800;padding:2px 9px;border-radius:10px;
+  background:#fef3c7;color:#b45309;white-space:nowrap;}
+
+.hoy-sups{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;}
+.hoy-sups label{display:flex;align-items:center;gap:11px;padding:9px 4px;
+  font-size:.92rem;color:#333;cursor:pointer;border-bottom:1px solid #f4f4f2;}
+.hoy-sups label:last-child{border-bottom:none;}
+.hoy-sups label.hecho{color:#15803d;}
+.hoy-sups input[type=checkbox]{width:22px;height:22px;accent-color:#2d6a4f;flex-shrink:0;}
+.hoy-sups em{display:block;font-style:normal;font-size:.72rem;color:#999;margin-top:1px;}
+
+.hoy-vasos{display:flex;gap:6px;}
+.hoy-vasos .vaso{flex:1;height:40px;border-radius:8px;border:1px dashed #cfd8d3;
+  background:#f7f9f8;cursor:pointer;padding:0;transition:background .12s;}
+.hoy-vasos .vaso.lleno{background:#5b9bd5;border:1px solid #4a86bd;}
+.hoy-vasos .vaso:active{transform:scale(.95);}
+
+.hoy-barra{height:7px;background:#eef1ee;border-radius:4px;overflow:hidden;}
+.hoy-barra-fill{height:100%;background:#f0b429;border-radius:4px;}
+.hoy-barra-fill.ok{background:#2d6a4f;}
+
+@media (max-width:640px){
+  .hoy-vasos .vaso{height:44px;}
+  .hoy-sups label{padding:11px 4px;font-size:.95rem;}
+}
