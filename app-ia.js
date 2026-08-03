@@ -228,7 +228,7 @@ async function guardarAnalisisForm(){
 function abrirAjustes(){
   const host = document.getElementById('ajustes-host');
   host.innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarAjustes()">
+  <div class="blk-modal-bg" onmousedown="ajFondoDown(event,this)" onclick="ajFondoClick(event,this)">
     <div class="blk-modal">
       <div class="blk-modal-hdr"><span>⚙ Conexión con tus datos</span>
         <button onclick="cerrarAjustes()">×</button></div>
@@ -265,7 +265,17 @@ function abrirAjustes(){
     </div>
   </div>`;
 }
-function cerrarAjustes(){ document.getElementById('ajustes-host').innerHTML = ''; }
+/* Mismo arreglo que fondoDown/fondoClick de app-base.js, pero para Ajustes.
+   Un clic solo cierra si EMPEZO y TERMINO en el fondo: al seleccionar la URL
+   arrastrando, el raton se suelta fuera del recuadro y antes cerraba solo. */
+let _ajFondo = false;
+function ajFondoDown(ev, el){ _ajFondo = (ev.target === el); }
+function ajFondoClick(ev, el){
+  const empezoFuera = _ajFondo;
+  _ajFondo = false;
+  if(ev.target === el && empezoFuera) cerrarAjustes();
+}
+function cerrarAjustes(){ _ajFondo = false; document.getElementById('ajustes-host').innerHTML = ''; }
 function guardarAjustes(){
   const u = document.getElementById('aj-url').value.trim();
   const t = document.getElementById('aj-token').value.trim();
