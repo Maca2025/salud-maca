@@ -124,9 +124,18 @@ function renderProgress() {
     </div>`;
 }
 
+/* Los limites comunes de grasa y musculo. Se calculan sobre las dos series a
+   la vez para que los dos ejes midan lo mismo aunque se pinten por separado. */
+function escalaKg(){
+  const v = DATA.flatMap(d=>[d.grasa, d.smm]).filter(x=>x!=null);
+  if(!v.length) return {min:0, max:100};
+  return {min: Math.floor(Math.min(...v) - 2), max: Math.ceil(Math.max(...v) + 2)};
+}
+
 function initRecomposicion(){
   if(!DATA.length) return;
   const labels = DATA.map(d=>d.fecha);
+  const LIM_KG = escalaKg();
 
   if(chartReg.cRecomp) chartReg.cRecomp.destroy();
   chartReg.cRecomp = new Chart(document.getElementById('cRecomp'), {
@@ -138,16 +147,25 @@ function initRecomposicion(){
       {label:'Grasa kg', data:DATA.map(d=>d.grasa), borderColor:'#e74c3c',
        backgroundColor:'#e74c3c22', fill:true, tension:.3, yAxisID:'yComp'},
       {label:'Músculo SMM kg', data:DATA.map(d=>d.smm), borderColor:'#2980b9',
-       backgroundColor:'#2980b922', fill:true, tension:.3, yAxisID:'yComp'},
+       backgroundColor:'#2980b922', fill:true, tension:.3, yAxisID:'ySmm'},
     ]},
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
       scales:{
         x:{grid:{color:GRID},ticks:{font:{size:9},maxRotation:45}},
-        yComp:{type:'linear',position:'left',grid:{color:GRID},ticks:{font:{size:9}},
-               title:{display:true,text:'kg',font:{size:9}}},
+        /* Grasa y musculo llevan eje propio para poder pintar cada escala del
+           color de su linea, pero COMPARTEN min y max (ver escalaKg abajo).
+           Asi las dos lineas quedan exactamente donde estaban y se siguen
+           pudiendo comparar en kilos: lo unico que cambia son las etiquetas. */
+        yComp:{type:'linear',position:'left',min:LIM_KG.min,max:LIM_KG.max,
+               grid:{color:GRID},ticks:{font:{size:9},color:'#e74c3c'},
+               title:{display:true,text:'grasa kg',font:{size:9},color:'#e74c3c'}},
+        ySmm:{type:'linear',position:'right',min:LIM_KG.min,max:LIM_KG.max,
+              grid:{drawOnChartArea:false},ticks:{font:{size:9},color:'#2980b9'},
+              title:{display:true,text:'músculo kg',font:{size:9},color:'#2980b9'}},
         yPeso:{type:'linear',position:'right',grid:{drawOnChartArea:false},
-               ticks:{font:{size:9},color:'#bbb'}},
+               ticks:{font:{size:9},color:'#b0b0aa'},
+               title:{display:true,text:'peso kg',font:{size:9},color:'#b0b0aa'}},
       },
       elements:{point:{radius:3,hoverRadius:5}}}
   });
@@ -155,13 +173,17 @@ function initRecomposicion(){
   // Tabla intervalo por intervalo
   const cont = document.getElementById('recomp-tabla');
   let filas = '';
+  const recomp = new Set(detectarRecomposicion().map(r=>r.de+'|'+r.a));
   for(let i=1;i<DATA.length;i++){
     const a=DATA[i-1], b=DATA[i];
     const dP=+(b.peso-a.peso).toFixed(1);
     const dG=+(b.grasa-a.grasa).toFixed(1);
     const dS=+(b.smm-a.smm).toFixed(1);
-    const gano = dP >= -0.6 && (dG <= -0.3 || dS >= 0.2);
-    const cal = dP < 0 ? Math.round(Math.min(100, Math.abs(dG)/Math.abs(dP)*100)) : null;
+    /* La marca ya NO se decide aqui: sale de detectarRecomposicion, que exige
+       la ventana de 28 dias. Un intervalo suelto de 6 dias no puede ganarsela.
+       Se ilumina la fila cuyo tramo largo TERMINA en esta medicion. */
+    const gano = [...recomp].some(k => k.split('|')[1] === b.fecha);
+    const cal = calidadPerdida(dP, dG);
     // Por debajo de VENTANA_MAGRA dias el delta de musculo no separa musculo
     // de hidratacion: se muestra atenuado y con la explicacion al pasar encima,
     // en vez de en verde o rojo como si fuera una lectura fiable.
@@ -176,19 +198,26 @@ function initRecomposicion(){
       <td class="${dP<0?'d-good':dP>0?'d-bad':''}">${dP>=0?'+':''}${dP}</td>
       <td class="${dG<0?'d-good':dG>0?'d-bad':''}">${dG>=0?'+':''}${dG}</td>
       <td class="${clsS}"${ttS} style="${corto?'color:#9aa0a6':''}">${dS>=0?'+':''}${dS}${corto?' ~':''}</td>
-      <td>${cal!=null?cal+'%':'—'}</td>
+      <td class="${cal==null?'':cal>100?'d-good':cal<50?'d-bad':''}">${
+        cal!=null?cal+'%':'—'}</td>
       <td>${gano?'<span class="recomp-badge">recomposición</span>':''}</td>
     </tr>`;
   }
   const n = detectarRecomposicion().length;
   cont.innerHTML = `
     <div class="tbl-section">Cambio entre mediciones</div>
-    <div class="recomp-leyenda">Marcados los periodos donde el peso se movió poco o subió,
-      pero perdiste grasa o ganaste músculo — <strong>${n} de ${DATA.length-1}</strong> intervalos.
-      La columna <em>calidad</em> es qué proporción de lo bajado fue grasa.
-      Los cambios de músculo marcados con <strong>~</strong> vienen de intervalos
-      de menos de ${VENTANA_MAGRA} días: ahí la báscula no puede separar músculo
-      de hidratación, así que son orientativos y no cuentan como progreso.</div>
+    <div class="recomp-leyenda">
+      La columna <em>calidad</em> es qué proporción de lo que bajaste fue grasa.
+      <strong>Por encima de 100 % significa que además ganaste masa magra</strong>:
+      perdiste más grasa que peso total. Si la grasa sube, la calidad es 0.
+      <br><br>
+      <strong>Recomposición</strong> marca los tramos de <strong>${VENTANA_MAGRA} días
+      o más</strong> en los que la grasa bajó más de ${RUIDO_GRASA} kg y la calidad
+      pasó de 100 % — <strong>${n}</strong> hasta ahora. Los ${VENTANA_MAGRA} días no
+      son un capricho: por debajo, el cambio de músculo que mide la báscula es
+      sobre todo hidratación, y por eso va atenuado con <strong>~</strong>.
+      El umbral de ${RUIDO_GRASA} kg es el ruido medido en tus propias
+      mediciones.</div>
     <div class="table-scroll"><table>
       <thead><tr><th>Periodo</th><th>Δ Peso</th><th>Δ Grasa</th><th>Δ Músculo</th><th>Calidad</th><th></th></tr></thead>
       <tbody>${filas}</tbody>

@@ -240,15 +240,71 @@ function regresion(campo, desde){
 
 /* Intervalos donde el peso engañó: se movió poco o subió,
    pero la composición mejoró. */
+/* ════════════════════════════════════════════════════════════
+   RECOMPOSICION Y CALIDAD
+   ------------------------------------------------------------
+   La version vieja comparaba mediciones CONTIGUAS con umbrales de 0.3 kg de
+   grasa y 0.2 kg de musculo, y marcaba cinco intervalos de 15, 6, 9, 4 y 8
+   dias. Ninguno llegaba a los 28 que la propia app exige para leer masa magra:
+   la tabla atenuaba el delta de musculo con "~" por no ser interpretable y la
+   regla lo usaba igual para decidir.
+
+   EL RUIDO, MEDIDO SOBRE SUS 19 MEDICIONES (16-mar a 3-ago 2026)
+   Ajustando una recta a cada serie y mirando cuanto se desvian los puntos:
+     grasa   tendencia -0.58 kg/sem · desviacion residual 0.68 kg
+     musculo tendencia -0.20 kg/sem · desviacion residual 0.49 kg
+   Para la DIFERENCIA entre dos mediciones la desviacion es esa por raiz de 2:
+   0.96 kg en grasa y 0.69 en musculo. Los umbrales de abajo son 1.5 veces eso.
+
+   Y el dato que lo explica: los residuos de grasa y de agua corporal
+   correlacionan a -0.61. Cuando el agua sale por encima de su tendencia, la
+   grasa sale por debajo. No es error aleatorio: es la bascula repartiendo el
+   mismo kilo entre grasa y agua. Por eso el ruido no baja midiendo mas veces,
+   solo separando mas las mediciones.
+
+   LA REGLA NUEVA
+   1. La ventana ha de ser de VENTANA_MAGRA dias o mas.
+   2. La grasa ha de bajar mas que su ruido.
+   3. La calidad ha de pasar de 100 %, que es exactamente decir que se perdio
+      mas grasa que peso total — y eso, por aritmetica, significa que la masa
+      magra SUBIO. Asi no hace falta un umbral inventado para el musculo: la
+      definicion de recomposicion sale sola.
+   ════════════════════════════════════════════════════════════ */
+const RUIDO_GRASA = 1.4;   // kg · 1.5 sigma de la diferencia entre dos medidas
+const RUIDO_SMM   = 1.0;   // kg · idem para el musculo
+
+/* Que proporcion de lo bajado fue grasa. null si el peso no bajo.
+   Sin Math.abs en la grasa: si la grasa SUBE la calidad es 0, no 100. Ese era
+   el bug que daba 100 % al 18-may -> 26-may, donde bajaron 1.6 kg de peso
+   ganando 1.6 kg de grasa. Y sin tope, para que un valor por encima de 100 se
+   vea: significa que ademas se gano masa magra. */
+function calidadPerdida(dP, dG){
+  if(dP >= 0) return null;
+  if(dG >= 0) return 0;
+  return Math.round(Math.abs(dG) / Math.abs(dP) * 100);
+}
+
+/* La medicion mas reciente que este al menos `ventana` dias antes de la i. */
+function baseDeVentana(i, ventana){
+  for(let j=i-1;j>=0;j--){
+    if(DATA[i].dias!=null && DATA[j].dias!=null && DATA[i].dias-DATA[j].dias >= ventana) return j;
+  }
+  return -1;
+}
+
 function detectarRecomposicion(){
+  const V = (typeof VENTANA_MAGRA === 'number') ? VENTANA_MAGRA : 28;
   const out = [];
   for(let i=1;i<DATA.length;i++){
-    const a=DATA[i-1], b=DATA[i];
+    const j = baseDeVentana(i, V);
+    if(j < 0) continue;
+    const a=DATA[j], b=DATA[i];
     const dP=+(b.peso-a.peso).toFixed(1);
     const dG=+(b.grasa-a.grasa).toFixed(1);
     const dS=+(b.smm-a.smm).toFixed(1);
-    if(dP >= -0.6 && (dG <= -0.3 || dS >= 0.2)){
-      out.push({de:a.fecha, a:b.fecha, dP, dG, dS});
+    const cal = calidadPerdida(dP, dG);
+    if(dG <= -RUIDO_GRASA && cal != null && cal > 100){
+      out.push({de:a.fecha, a:b.fecha, dias:b.dias-a.dias, dP, dG, dS, cal});
     }
   }
   return out;
