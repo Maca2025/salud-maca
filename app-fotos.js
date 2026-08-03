@@ -740,7 +740,7 @@ function renderEtiquetado(){
   }).join('');
 
   document.getElementById('form-host').innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cancelarSubida()">
+  <div class="blk-modal-bg" onmousedown="subFondoDown(event,this)" onclick="subFondoClick(event,this)">
     <div class="form-modal">
       <div class="blk-modal-hdr"><span>Etiquetar sesión</span>
         <button onclick="cancelarSubida()">×</button></div>
@@ -804,7 +804,16 @@ function cambiarFechaSubida(v){
   renderEtiquetado();
 }
 
+/* Mismo arreglo del fondo: un clic solo cierra si EMPEZO y TERMINO fuera. */
+let _subFondo = false;
+function subFondoDown(ev, el){ _subFondo = (ev.target === el); }
+function subFondoClick(ev, el){
+  const empezoFuera = _subFondo;
+  _subFondo = false;
+  if(ev.target === el && empezoFuera) cancelarSubida();
+}
 function cancelarSubida(){
+  _subFondo = false;
   if(_subida.length && !confirm('¿Descartar estas fotos sin subirlas?')) return;
   _subida.forEach(s=>{ try{ URL.revokeObjectURL(s.url); }catch(e){} });
   _subida = [];

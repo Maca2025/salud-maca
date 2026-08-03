@@ -7,8 +7,16 @@ function ingestaDe(iso){
 }
 
 let _itemsHoy = [];      // [{alimento, g, origen, prot, kcal}]
-let _aguaHoy   = 0;
 let _creatinaHoy = false;
+
+/* El agua NO se guarda en una variable de esta pantalla. Se lee siempre de
+   INGESTA, que es lo que la hoja tiene. Antes se hidrataba una sola vez al dia
+   y los vasos marcados despues desde Hoy no se veian aqui — y peor: "Guardar
+   dia" mandaba el valor viejo y los borraba. */
+function aguaLog(){
+  const d = ingestaDe(hoyISO());
+  return d ? (d.agua || 0) : 0;
+}
 let _fechaLog  = null;   // fecha del borrador cargado en memoria
 let _sinGuardar = false; // hay cambios en pantalla que no están en la hoja
 const ING_KEY  = 'maca-ingesta-borrador';
@@ -25,7 +33,7 @@ function guardarBorradorLog(){
     localStorage.setItem(ING_KEY, JSON.stringify({
       fecha: hoyISO(),
       items: _itemsHoy.map(it=>({a:it.alimento, g:it.g})),
-      agua: _aguaHoy, creatina: _creatinaHoy
+      creatina: _creatinaHoy
     }));
   } catch(e){}
 }
@@ -89,20 +97,19 @@ function renderIngestaHoy(){
     // Base: lo que ya está en la hoja
     if(y && y.detalle) {
       _itemsHoy = parseDetalle(y.detalle);
-      _aguaHoy = y.agua || 0;
       _creatinaHoy = !!y.creatina;
       _sinGuardar = false;          // lo que vino de la hoja ya está guardado
     }
     // Encima, el borrador local si trae más cosas (quedó sin guardar)
     if(b && b.items && b.items.length > _itemsHoy.length){
       _itemsHoy = b.items.map(x=>itemDe(x.a, x.g));
-      _aguaHoy = Math.max(_aguaHoy, b.agua || 0);
       _creatinaHoy = _creatinaHoy || !!b.creatina;
       _sinGuardar = true;           // el borrador traía cosas sin guardar
     }
   }
   const t = totalesHoy();
-  const vasos = Math.round(_aguaHoy/250);
+  const aguaMl = aguaLog();
+  const vasos = Math.round(aguaMl/250);
 
   // Chips: primero lo frecuente de la tabla, luego lo de hoy en el plan
   const frecuentes = ALIMENTOS.filter(a=>a.frecuente && a.porcion>0);
@@ -124,7 +131,7 @@ function renderIngestaHoy(){
     <div class="log-hoy">
       <div class="log-tot">
         <div class="lt-big"><strong>${t.pa+t.pv} g</strong><span>proteína hoy</span></div>
-        ${(!_itemsHoy.length && !_aguaHoy && !_creatinaHoy) ? '' :
+        ${(!_itemsHoy.length && !_creatinaHoy) ? '' :
           (_sinGuardar
             ? '<div class="log-estado pend">● sin guardar</div>'
             : '<div class="log-estado ok">✓ guardado</div>')}
@@ -147,7 +154,7 @@ function renderIngestaHoy(){
 
       <div class="log-extras">
         <div class="agua-box">
-          <div class="agua-lbl">💧 Agua <strong>${(_aguaHoy/1000).toFixed(2)} L</strong></div>
+          <div class="agua-lbl">💧 Agua <strong>${(aguaMl/1000).toFixed(2)} L</strong></div>
           <div class="agua-vasos">
             ${Array.from({length:10},(_,k)=>`
               <button class="vaso ${k<vasos?'lleno':''}" onclick="setAgua(${(k+1)*250})"
@@ -175,11 +182,27 @@ function quitarItem(i){
   marcarCambio();
   renderIngestaHoy();
 }
-function setAgua(ml){
-  _aguaHoy = (_aguaHoy === ml) ? ml-250 : ml;   // volver a tocar el mismo vaso lo quita
-  if(_aguaHoy < 0) _aguaHoy = 0;
-  marcarCambio();
-  renderIngestaHoy();
+/* Guarda en el acto, igual que tocarVaso en Hoy: el agua es el unico dato de
+   esta pantalla que se escribe solo. Manda unicamente {fecha, agua}, y
+   guardarIngesta conserva lo que no se le envia, asi que no pisa la comida. */
+async function setAgua(ml){
+  const actual = aguaLog();
+  let nuevo = (actual === ml) ? ml-250 : ml;   // volver a tocar el mismo vaso lo quita
+  if(nuevo < 0) nuevo = 0;
+  const caja = document.querySelector('#ingesta-hoy .agua-box');
+  if(caja) caja.style.opacity = '.5';
+  try {
+    await api({action:'guardarIngesta', fecha:hoyISO(), agua:nuevo});
+    let d = ingestaDe(hoyISO());
+    if(!d){ d = {fecha:hoyISO(), prot_animal:0, prot_vegetal:0, agua:0}; INGESTA.push(d); }
+    d.agua = nuevo;
+    renderIngestaHoy();
+    if(typeof renderHoy === 'function') renderHoy();
+    renderIngestaResumen(); renderIngestaTabla();
+  } catch(e){
+    if(caja) caja.style.opacity = '1';
+    alert('No se pudo guardar el agua: ' + e.message);
+  }
 }
 function toggleCreatina(){
   _creatinaHoy = !_creatinaHoy;
@@ -421,7 +444,6 @@ async function guardarIngestaHoy(){
         );
         if(sumar){
           faltan.forEach(x=>_itemsHoy.push(x));
-          if((serv.agua||0) > _aguaHoy) _aguaHoy = serv.agua;
           _creatinaHoy = _creatinaHoy || !!serv.creatina;
           guardarBorradorLog();
           renderIngestaHoy();
@@ -442,9 +464,11 @@ async function guardarIngestaHoy(){
   const t = totalesHoy();
   const detalle = _itemsHoy.map(it=>`${it.alimento} ${it.g}`).join('|');
 
+  // Sin `agua`: la escribe setAgua en el acto y guardarIngesta conserva lo que
+  // no se le manda. Mandarla desde aqui era lo que borraba los vasos de Hoy.
   const datos = {action:'guardarIngesta', fecha: hoyISO(),
     prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes, kcal:t.kcal,
-    agua:_aguaHoy, creatina:_creatinaHoy?1:0, detalle};
+    creatina:_creatinaHoy?1:0, detalle};
 
   btn.textContent = 'Guardando…';
   try {
@@ -452,7 +476,7 @@ async function guardarIngestaHoy(){
     const i = INGESTA.findIndex(x=>x.fecha===datos.fecha);
     const nuevo = {fecha:datos.fecha, nota:'', detalle,
       prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes,
-      agua:_aguaHoy, creatina:datos.creatina, kcal:t.kcal};
+      agua:aguaLog(), creatina:datos.creatina, kcal:t.kcal};
     if(i>=0) INGESTA[i] = nuevo; else INGESTA.push(nuevo);
     INGESTA.sort((a,b)=>a.fecha.localeCompare(b.fecha));
     limpiarBorradorLog();   // ya está en la hoja, el borrador sobra

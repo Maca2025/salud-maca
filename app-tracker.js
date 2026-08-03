@@ -361,7 +361,7 @@ function abrirModalBloque(blkId){
 
   const host = document.getElementById('blk-modal-host');
   host.innerHTML = `
-  <div class="blk-modal-bg" onclick="if(event.target===this)cerrarModalBloque()">
+  <div class="blk-modal-bg" onmousedown="blkFondoDown(event,this)" onclick="blkFondoClick(event,this)">
     <div class="blk-modal">
       <div class="blk-modal-hdr">
         <span>${esNuevo?'Nuevo bloque':'Editar bloque'}</span>
@@ -412,7 +412,18 @@ function pickColor(el){
   el.parentNode.querySelectorAll('.blk-color').forEach(c=>c.classList.remove('sel'));
   el.classList.add('sel');
 }
+/* Un clic solo cierra si EMPEZO y TERMINO en el fondo. Sin esto, seleccionar
+   texto de un campo arrastrando y soltar fuera del recuadro cerraba el modal.
+   Bandera propia: fondoClick de app-base.js llama a cerrarForm() fijo. */
+let _blkFondo = false;
+function blkFondoDown(ev, el){ _blkFondo = (ev.target === el); }
+function blkFondoClick(ev, el){
+  const empezoFuera = _blkFondo;
+  _blkFondo = false;
+  if(ev.target === el && empezoFuera) cerrarModalBloque();
+}
 function cerrarModalBloque(){
+  _blkFondo = false;
   const host = document.getElementById('blk-modal-host');
   if(host) host.innerHTML='';
 }
