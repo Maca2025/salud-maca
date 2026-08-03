@@ -124,48 +124,79 @@ function renderProgress() {
     </div>`;
 }
 
-/* Los limites comunes de grasa y musculo. Se calculan sobre las dos series a
-   la vez para que los dos ejes midan lo mismo aunque se pinten por separado. */
-function escalaKg(){
-  const v = DATA.flatMap(d=>[d.grasa, d.smm]).filter(x=>x!=null);
-  if(!v.length) return {min:0, max:100};
-  return {min: Math.floor(Math.min(...v) - 2), max: Math.ceil(Math.max(...v) + 2)};
-}
+/* LAS METAS SE DIBUJAN A MANO, NO COMO DATASET, por lo mismo que en la
+   grafica de proteina: un plugin pinta encima del area y no las tocan las
+   escalas ni el apilado.
+
+   Son las dos caras del MISMO objetivo, no dos metas sueltas: si la masa magra
+   son 47 kg y la grasa el 30 % del peso, el peso objetivo sale 67.1 y la grasa
+   objetivo 20.1. Por eso grasaMetaKg() se deriva del suelo y no se escribe a
+   mano en ningun sitio. */
+const plugMetas = {
+  id:'metas',
+  afterDatasetsDraw(chart, args, opts){
+    const lineas = (opts && opts.lineas) || [];
+    const {ctx, chartArea, scales} = chart;
+    ctx.save();
+    lineas.forEach(l => {
+      if(l.valor == null) return;
+      const y = scales.y.getPixelForValue(l.valor);
+      if(y < chartArea.top || y > chartArea.bottom) return;
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5,4]);
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, y);
+      ctx.lineTo(chartArea.right, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = l.color;
+      ctx.font = '600 10px system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(l.texto, chartArea.right - 3, y - 3);
+    });
+    ctx.restore();
+  }
+};
 
 function initRecomposicion(){
   if(!DATA.length) return;
   const labels = DATA.map(d=>d.fecha);
-  const LIM_KG = escalaKg();
 
+  /* UN SOLO EJE, y en kilos, porque las tres series SON kilos. Con tres
+     escalas distintas era el eje —no el dato— quien decidia cuanto se
+     parecian las lineas.
+     Y va la MASA MAGRA, no el SMM: en las 19 mediciones smm/masa magra va de
+     0.546 a 0.554, o sea que el SMM es la masa magra multiplicada por 0.55 y
+     no aporta ni un dato nuevo. La masa magra ademas es la metrica en la que
+     esta escrito el objetivo, asi que su suelo se puede dibujar. */
   if(chartReg.cRecomp) chartReg.cRecomp.destroy();
   chartReg.cRecomp = new Chart(document.getElementById('cRecomp'), {
     type:'line',
+    plugins:[plugMetas],
     data:{labels, datasets:[
-      {label:'Peso (contexto)', data:DATA.map(d=>d.peso), borderColor:'#d5d5d0',
-       backgroundColor:'#d5d5d022', fill:false, tension:.3, borderDash:[4,4],
-       pointRadius:0, yAxisID:'yPeso'},
+      {label:'Peso (contexto)', data:DATA.map(d=>d.peso), borderColor:'#c9c9c3',
+       fill:false, tension:.3, borderDash:[4,4], borderWidth:1.5, pointRadius:0},
       {label:'Grasa kg', data:DATA.map(d=>d.grasa), borderColor:'#e74c3c',
-       backgroundColor:'#e74c3c22', fill:true, tension:.3, yAxisID:'yComp'},
-      {label:'Músculo SMM kg', data:DATA.map(d=>d.smm), borderColor:'#2980b9',
-       backgroundColor:'#2980b922', fill:true, tension:.3, yAxisID:'ySmm'},
+       fill:false, tension:.3, borderWidth:2, pointRadius:2.5},
+      {label:'Masa magra kg', data:DATA.map(d=>mlgDe(d)), borderColor:'#2980b9',
+       fill:false, tension:.3, borderWidth:2.5, pointRadius:2.5},
     ]},
     options:{responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
+      interaction:{mode:'index', intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        metas:{lineas:[
+          {valor: grasaMetaKg(), color:'#e74c3c',
+           texto:`objetivo grasa ${grasaMetaKg()} kg (${metaPbf()} %)`},
+          {valor: sueloMlg(),    color:'#2980b9',
+           texto:`objetivo masa magra ${sueloMlg()} kg`},
+        ]},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} kg`}}},
       scales:{
-        x:{grid:{color:GRID},ticks:{font:{size:9},maxRotation:45}},
-        /* Grasa y musculo llevan eje propio para poder pintar cada escala del
-           color de su linea, pero COMPARTEN min y max (ver escalaKg abajo).
-           Asi las dos lineas quedan exactamente donde estaban y se siguen
-           pudiendo comparar en kilos: lo unico que cambia son las etiquetas. */
-        yComp:{type:'linear',position:'left',min:LIM_KG.min,max:LIM_KG.max,
-               grid:{color:GRID},ticks:{font:{size:9},color:'#e74c3c'},
-               title:{display:true,text:'grasa kg',font:{size:9},color:'#e74c3c'}},
-        ySmm:{type:'linear',position:'right',min:LIM_KG.min,max:LIM_KG.max,
-              grid:{drawOnChartArea:false},ticks:{font:{size:9},color:'#2980b9'},
-              title:{display:true,text:'músculo kg',font:{size:9},color:'#2980b9'}},
-        yPeso:{type:'linear',position:'right',grid:{drawOnChartArea:false},
-               ticks:{font:{size:9},color:'#b0b0aa'},
-               title:{display:true,text:'peso kg',font:{size:9},color:'#b0b0aa'}},
+        x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}},
+        y:{grid:{color:GRID},ticks:{font:{size:9}},beginAtZero:false,
+           title:{display:true,text:'kg',font:{size:9}}},
       },
       elements:{point:{radius:3,hoverRadius:5}}}
   });
