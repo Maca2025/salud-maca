@@ -469,3 +469,289 @@ function initComposicion() {
     plugins:[dp]
   });
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MEDIDAS CON CINTA
+   ---------------------------------------------------------------
+   La cinta metrica mide algo que la bioimpedancia NO puede: toda la
+   composicion corporal sale del agua corporal (coeficiente 73.3 %),
+   y esto no. Es el contraste independiente.
+
+   La cintura es la que manda. El umbral practico es cintura/altura
+   por debajo de 0.5 — con 163 cm, 81.5 cm. Es mejor marcador
+   metabolico que el IMC y se mide en diez segundos.
+
+   Misma logica que la masa magra: la cinta tiene ~1 cm de error
+   entre mediciones y al ritmo actual un centimetro tarda unas dos
+   semanas en aparecer. Medir cada siete dias es medir ruido.
+   ═══════════════════════════════════════════════════════════════ */
+const VENTANA_CINTA = 14;    // dias minimos entre medidas para interpretar
+const ERROR_CINTA   = 1.0;   // cm de error tipico entre dos mediciones
+const CINTURA_RATIO = 0.5;   // cintura/altura: umbral de riesgo metabolico
+const WHR_MAX       = 0.85;  // cintura/cadera, referencia en mujeres
+
+const CAMPOS_CINTA = [
+  {k:'cintura',     l:'Cintura',     estrella:true},
+  {k:'cadera',      l:'Cadera'},
+  {k:'brazo',       l:'Brazo'},
+  {k:'muslo',       l:'Muslo'},
+  {k:'pantorrilla', l:'Pantorrilla'}
+];
+
+function alturaCm(){ return (typeof ALTURA_CM === 'number' && ALTURA_CM > 0) ? ALTURA_CM : 163; }
+function cinturaUmbral(){ return +(alturaCm() * CINTURA_RATIO).toFixed(1); }
+
+function diasEntre(isoA, isoB){
+  const a = isoA.split('-'), b = isoB.split('-');
+  return Math.round((Date.UTC(+b[0], +b[1]-1, +b[2]) -
+                     Date.UTC(+a[0], +a[1]-1, +a[2])) / 86400000);
+}
+
+/* La referencia util mas cercana: la primera medida al menos VENTANA_CINTA
+   dias atras. Igual que con la masa magra, no se oculta el dato: se elige
+   bien el punto de comparacion. */
+function medidaPrevia(campo){
+  if(PERIM.length < 2) return null;
+  const ult = PERIM[PERIM.length-1];
+  if(ult[campo] == null) return null;
+  for(let i = PERIM.length-2; i >= 0; i--){
+    if(PERIM[i][campo] == null) continue;
+    const dias = diasEntre(PERIM[i].fecha, ult.fecha);
+    if(dias < VENTANA_CINTA) continue;
+    const delta = +(ult[campo] - PERIM[i][campo]).toFixed(1);
+    return {ref:PERIM[i], dias, delta, fiable:Math.abs(delta) >= ERROR_CINTA};
+  }
+  return null;
+}
+
+function tarjetaCintura(){
+  const ult = PERIM.length ? PERIM[PERIM.length-1] : null;
+  if(!ult || ult.cintura == null) return '';
+  const umbral = cinturaUmbral();
+  const ratio  = +(ult.cintura / alturaCm()).toFixed(3);
+  const falta  = +(ult.cintura - umbral).toFixed(1);
+  const estado = falta <= 0 ? 'bien' : (falta <= 5 ? 'ojo' : 'mal');
+  const v = medidaPrevia('cintura');
+
+  const pie = v
+    ? `${signoKg(v.delta)} cm desde ${esc(v.ref.fecha)} — ${v.dias} días.` +
+      (v.fiable ? '' : ' <span class="pc-sub">Por debajo del error de la cinta: todavía no es un cambio.</span>')
+    : (PERIM.length < 2
+        ? 'Primera medida. La siguiente, en 2 a 4 semanas.'
+        : `Hacen falta ${VENTANA_CINTA} días entre medidas para leer el cambio.`);
+
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Cintura <span class="pc-sub">· el marcador metabólico</span></div>
+    <div class="pc-fila">
+      <span class="pc-num">${ult.cintura.toFixed(1)}</span><span class="pc-uni">cm</span>
+      <span class="pc-chip ${estado}">${falta <= 0 ? 'en objetivo' : signoKg(falta) + ' cm'}</span>
+    </div>
+    <div class="pc-barra"><div class="pc-barra-fill" style="width:${
+      Math.max(0, Math.min(100, Math.round(umbral / ult.cintura * 100)))}%"></div></div>
+    <div class="pc-pie">cintura ÷ altura = <strong>${ratio}</strong> · objetivo por debajo de
+      ${CINTURA_RATIO} (${umbral} cm)<br>${pie}</div>
+  </div>`;
+}
+
+function tarjetaWhr(){
+  const ult = PERIM.length ? PERIM[PERIM.length-1] : null;
+  if(!ult || ult.cintura == null || !ult.cadera) return '';
+  const whr = +(ult.cintura / ult.cadera).toFixed(2);
+  const estado = whr <= WHR_MAX ? 'bien' : (whr <= WHR_MAX + 0.1 ? 'ojo' : 'mal');
+  const v = medidaPrevia('cadera');
+
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Cintura ÷ cadera</div>
+    <div class="pc-fila">
+      <span class="pc-num">${whr}</span>
+      <span class="pc-chip ${estado}">${whr <= WHR_MAX ? 'en rango' : 'sobre ' + WHR_MAX}</span>
+    </div>
+    <div class="pc-pie">Referencia en mujeres: por debajo de ${WHR_MAX}. Mide cómo se
+      reparte la grasa, no cuánta hay.${v ? ` Cadera ${signoKg(v.delta)} cm en ${v.dias} días.` : ''}</div>
+  </div>`;
+}
+
+function tablaMedidas(){
+  if(!PERIM.length) return '';
+  let filas = '';
+  for(let i = PERIM.length-1; i >= 0; i--){
+    const m = PERIM[i], p = i > 0 ? PERIM[i-1] : null;
+    const dias = p ? diasEntre(p.fecha, m.fecha) : null;
+    const corto = dias != null && dias < VENTANA_CINTA;
+    let celdas = '';
+    CAMPOS_CINTA.forEach(c => {
+      const v = m[c.k];
+      if(v == null){ celdas += '<td>—</td><td>—</td>'; return; }
+      celdas += `<td>${v.toFixed(1)}</td>`;
+      if(!p || p[c.k] == null){ celdas += '<td>—</td>'; return; }
+      const d = +(v - p[c.k]).toFixed(1);
+      const ruido = corto || Math.abs(d) < ERROR_CINTA;
+      celdas += `<td class="${ruido ? 'd-agua' : (d < 0 ? 'd-good' : 'd-bad')}"${
+        ruido ? ' title="Por debajo del error de la cinta o con menos de ' + VENTANA_CINTA +
+        ' días de diferencia: orientativo."' : ''}${
+        ruido ? ' style="color:#9aa0a6"' : ''}>${d >= 0 ? '+' : ''}${d}${ruido ? ' ~' : ''}</td>`;
+    });
+    filas += `<tr${i === PERIM.length-1 ? ' class="latest"' : ''}>
+      <td>${esc(m.fecha)}${i === PERIM.length-1 ? ' ★' : ''}</td>${celdas}
+      <td>${esc(m.nota || '')}</td></tr>`;
+  }
+  const th = CAMPOS_CINTA.map(c => `<th>${c.l}</th><th>Δ</th>`).join('');
+  return `
+    <div class="tbl-section">Todas las medidas</div>
+    <div class="recomp-leyenda">Los cambios marcados con <strong>~</strong> están por debajo
+      del error de la cinta (±${ERROR_CINTA} cm) o vienen de menos de ${VENTANA_CINTA} días:
+      son orientativos, no progreso.</div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Fecha</th>${th}<th>Nota</th></tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div>`;
+}
+
+function guiaCinta(){
+  return `
+  <div class="pc-aviso" style="margin-top:14px">
+    Los cinco puntos, y las reglas que hacen que los números sirvan.
+    <button class="link-btn" onclick="verGuiaCinta()">Ver cómo medir</button>
+    <div id="guia-cinta" hidden>
+      <div><strong>1 · Cintura</strong> — en el punto medio entre la última costilla y el hueso
+        de la cadera. Palpa los dos y mide a media altura; queda por encima del ombligo.
+        Suelta el aire y mide al final, sin meter barriga.</div>
+      <div><strong>2 · Cadera</strong> — por la parte más ancha de los glúteos, pies juntos.</div>
+      <div><strong>3 · Brazo derecho</strong> — punto medio entre hombro y codo,
+        con el brazo colgando relajado. Sin contraer.</div>
+      <div><strong>4 · Muslo derecho</strong> — punto medio entre el pliegue de la ingle
+        y el borde de la rótula, de pie y con el peso repartido.</div>
+      <div><strong>5 · Pantorrilla derecha</strong> — por la parte más gruesa.</div>
+      <div style="margin-top:7px"><strong>Siempre igual:</strong> por la mañana, en ayunas,
+        antes de beber y después del baño · sobre la piel · ajustada sin hundir ·
+        paralela al suelo también por detrás · <strong>mide dos veces</strong> y si difieren
+        más de 1 cm, una tercera y apunta la media.</div>
+    </div>
+  </div>`;
+}
+
+function verGuiaCinta(){
+  const d = document.getElementById('guia-cinta');
+  if(d) d.hidden = !d.hidden;
+}
+
+function renderMedidas(){
+  const host = document.getElementById('medidas-host');
+  if(!host) return;
+  if(!PERIM.length){
+    host.innerHTML = `
+      <div class="proyeccion">Todavía no hay ninguna medida. Con la cinta tienes el único
+        dato de tu cuerpo que no depende de la hidratación — y la cintura es mejor marcador
+        metabólico que el IMC.
+        <button class="blk-btn primary" style="margin-top:9px" onclick="abrirFormMedida()">Tomar la primera</button>
+      </div>${guiaCinta()}`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="portada">
+      <div class="pc-grid">${tarjetaCintura()}${tarjetaWhr()}</div>
+      ${guiaCinta()}
+    </div>
+    ${tablaMedidas()}`;
+}
+
+function initMedidas(){
+  renderMedidas();
+  const cv = document.getElementById('cCinta');
+  if(!cv || PERIM.length < 2) return;
+  if(chartReg.cCinta) chartReg.cCinta.destroy();
+  chartReg.cCinta = new Chart(cv, {
+    type:'line',
+    data:{labels: PERIM.map(m => m.fecha), datasets:[
+      {label:'Cintura cm', data:PERIM.map(m => m.cintura), borderColor:R,
+       backgroundColor:'#e74c3c22', fill:true, tension:.3},
+      {label:'Cadera cm', data:PERIM.map(m => m.cadera), borderColor:B,
+       fill:false, tension:.3, borderDash:[4,3]}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
+      scales:{x:{grid:{color:GRID},ticks:{font:{size:9},maxRotation:45}},
+              y:{grid:{color:GRID},ticks:{font:{size:9}}}},
+      elements:{point:{radius:3,hoverRadius:5}}}
+  });
+}
+
+/* ── Formulario ─────────────────────────────────────────────── */
+function abrirFormMedida(){
+  const ult = PERIM.length ? PERIM[PERIM.length-1] : null;
+  const campo = c => `
+    <div class="form-campo">
+      <label for="cin-${c.k}">${esc(c.l)} <span class="op">cm</span>
+        ${c.estrella ? '<span style="color:#c0392b">*</span>' : ''}</label>
+      <input type="number" step="0.1" inputmode="decimal" id="cin-${c.k}"
+        placeholder="${ult && ult[c.k] != null ? ult[c.k] : ''}">
+    </div>`;
+
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal">
+      <div class="blk-modal-hdr"><span>📏 Medidas con cinta</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        <div id="cin-msg" class="form-msg info">
+          Solo la cintura es obligatoria. Los grises son tu última medida${
+            ult ? ` (${esc(ult.fecha)})` : ''}, como referencia.
+        </div>
+        <div class="form-campo" style="max-width:190px">
+          <label for="cin-fecha">Fecha</label>
+          <input type="date" id="cin-fecha" value="${hoyISO()}" max="${hoyISO()}">
+        </div>
+        <div class="form-grid">${CAMPOS_CINTA.map(campo).join('')}</div>
+        <div class="form-campo">
+          <label for="cin-nota">Nota</label>
+          <input id="cin-nota" placeholder="En ayunas, antes de beber…">
+        </div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Cancelar</button>
+        <button class="blk-btn primary" id="cin-guardar" onclick="guardarMedidaForm()">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const e = document.getElementById('cin-cintura'); if(e) e.focus(); }, 60);
+}
+
+async function guardarMedidaForm(){
+  const msg = document.getElementById('cin-msg');
+  const btn = document.getElementById('cin-guardar');
+  const params = {action:'perimetro', fecha: document.getElementById('cin-fecha').value,
+                  nota: document.getElementById('cin-nota').value.trim()};
+
+  document.querySelectorAll('#form-host input').forEach(i => i.classList.remove('err'));
+  const cin = document.getElementById('cin-cintura');
+  if(!cin.value.trim()){
+    cin.classList.add('err');
+    msg.className = 'form-msg err'; msg.textContent = 'La cintura es obligatoria.';
+    cin.focus(); return;
+  }
+  let malos = [];
+  CAMPOS_CINTA.forEach(c => {
+    const el = document.getElementById('cin-'+c.k), v = el.value.trim();
+    if(!v) return;
+    if(isNaN(Number(v))){ el.classList.add('err'); malos.push(c.l); return; }
+    params[c.k] = v;
+  });
+  if(malos.length){
+    msg.className = 'form-msg err'; msg.textContent = 'Revisa: ' + malos.join(', ');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const r = await api(params);
+    msg.className = 'form-msg ok';
+    msg.textContent = `✓ ${r.actualizado ? 'Corregida' : 'Guardada'} la medida del ${r.fecha}.`;
+    btn.textContent = '✓ Guardada';
+    setTimeout(() => { cerrarForm(); recargarDatos(); }, 900);
+  } catch(e){
+    msg.className = 'form-msg err'; msg.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}

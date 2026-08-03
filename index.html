@@ -15,7 +15,7 @@
   <link rel="icon" href="icon-app.png"/>
   <title>Maca · Salud</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="estilos.css?v=20260803d"/>
+  <link rel="stylesheet" href="estilos.css?v=20260803e"/>
 </head>
 <body>
 
@@ -153,8 +153,27 @@
     <button class="tab-btn active" data-tab="composicion" onclick="switchCompTab('composicion',this)">Composición</button>
     <button class="tab-btn" data-tab="recomposicion" onclick="switchCompTab('recomposicion',this)">Grasa vs Músculo</button>
     <button class="tab-btn" data-tab="resumen" onclick="switchCompTab('resumen',this)">Resumen</button>
+    <button class="tab-btn" data-tab="medidas" onclick="switchCompTab('medidas',this)">Medidas</button>
     <button class="tab-btn" onclick="switchCompTab('tabla',this)">Tabla completa</button>
     <button class="tab-btn" onclick="switchCompTab('glosario',this)">Glosario</button>
+  </div>
+
+  <!-- Pestaña: Medidas con cinta -->
+  <div class="tab-panel" id="comp-medidas">
+    <div class="panel-body">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="blk-btn primary" onclick="abrirFormMedida()">＋ Nueva medida</button>
+      </div>
+      <div id="medidas-host"></div>
+      <div class="chart-card" style="margin-top:14px">
+        <h3>Cintura y cadera en el tiempo (cm)</h3>
+        <div class="chart-wrap" style="height:300px"><canvas id="cCinta"></canvas></div>
+        <div style="margin-top:8px;font-size:0.72rem;color:#888;line-height:1.5">
+          La cinta mide lo único que no sale del agua corporal. Cada 2 a 4 semanas basta:
+          por debajo de eso se mide el error de la cinta, no el cambio.
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Pestaña: Composición (stacked bar + progreso) -->
@@ -584,21 +603,21 @@
      HTML MODULE: FOOTER
 ══════════════════════════════════════════════════════════ -->
 <footer id="pie">Datos cargados desde Google Sheets</footer>
-<script src="app-datos.js?v=20260803d"></script>
-<script src="app-base.js?v=20260803d"></script>
-<script src="app-composicion.js?v=20260803d"></script>
-<script src="app-laboratorio.js?v=20260803d"></script>
-<script src="app-planes.js?v=20260803d"></script>
-<script src="app-suplementos.js?v=20260803d"></script>
-<script src="app-ingesta.js?v=20260803d"></script>
-<script src="app-alimentos.js?v=20260803d"></script>
-<script src="app-tracker.js?v=20260803d"></script>
-<script src="app-editar.js?v=20260803d"></script>
-<script src="app-registro.js?v=20260803d"></script>
-<script src="app-fotos.js?v=20260803d"></script>
-<script src="app-nav.js?v=20260803d"></script>
-<script src="app-macros.js?v=20260803d"></script>
-<script src="app-formularios.js?v=20260803d"></script>
-<script src="app-ia.js?v=20260803d"></script>
+<script src="app-datos.js?v=20260803e"></script>
+<script src="app-base.js?v=20260803e"></script>
+<script src="app-composicion.js?v=20260803e"></script>
+<script src="app-laboratorio.js?v=20260803e"></script>
+<script src="app-planes.js?v=20260803e"></script>
+<script src="app-suplementos.js?v=20260803e"></script>
+<script src="app-ingesta.js?v=20260803e"></script>
+<script src="app-alimentos.js?v=20260803e"></script>
+<script src="app-tracker.js?v=20260803e"></script>
+<script src="app-editar.js?v=20260803e"></script>
+<script src="app-registro.js?v=20260803e"></script>
+<script src="app-fotos.js?v=20260803e"></script>
+<script src="app-nav.js?v=20260803e"></script>
+<script src="app-macros.js?v=20260803e"></script>
+<script src="app-formularios.js?v=20260803e"></script>
+<script src="app-ia.js?v=20260803e"></script>
 </body>
 </html>

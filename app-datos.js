@@ -53,6 +53,11 @@ let SUELO = {mlg:47};
    ejecuta el codigo guardado y la app la version publicada, y confundirlas
    cuesta caro. Vacia = el script todavia no la manda. */
 let VERSION_API = '';
+
+/* Medidas con cinta. Viven en su propia hoja porque su cadencia es otra
+   (cada 2-4 semanas) y porque miden algo que la bioimpedancia no puede. */
+let PERIM = [];
+let ALTURA_CM = 163;
 let SD = {}, SR = {}, SSECTIONS = [], SUPS = [];
 let EXP = {}, INTERACCIONES = [], STATUS_PANEL = {controlados:[], vigilancia:[], pendientes:[]};
 let OPTIMOS = {}, INGESTA = [];
