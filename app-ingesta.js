@@ -6,8 +6,19 @@ function ingestaDe(iso){
   return INGESTA.find(x=>x.fecha===iso) || null;
 }
 
+/* La creatina es un suplemento: se marca en el Protocolo como todo lo demas y
+   se cuenta desde el historial del tracker. Si todavia no existe la fila con
+   id "creatina" en la hoja de suplementos, no se ensena la metrica en vez de
+   ensenar un cero falso. */
+function creatinaEnProtocolo(){
+  return typeof supById === 'function' && !!supById('creatina');
+}
+function creatinaEn(iso){
+  const h = (typeof HIST !== 'undefined' ? HIST : []).find(d=>d.fecha===iso);
+  return !!(h && h.tomas && h.tomas.creatina);
+}
+
 let _itemsHoy = [];      // [{alimento, g, origen, prot, kcal}]
-let _creatinaHoy = false;
 
 /* El agua NO se guarda en una variable de esta pantalla. Se lee siempre de
    INGESTA, que es lo que la hoja tiene. Antes se hidrataba una sola vez al dia
@@ -32,8 +43,7 @@ function guardarBorradorLog(){
   try {
     localStorage.setItem(ING_KEY, JSON.stringify({
       fecha: hoyISO(),
-      items: _itemsHoy.map(it=>({a:it.alimento, g:it.g})),
-      creatina: _creatinaHoy
+      items: _itemsHoy.map(it=>({a:it.alimento, g:it.g}))
     }));
   } catch(e){}
 }
@@ -97,13 +107,11 @@ function renderIngestaHoy(){
     // Base: lo que ya está en la hoja
     if(y && y.detalle) {
       _itemsHoy = parseDetalle(y.detalle);
-      _creatinaHoy = !!y.creatina;
       _sinGuardar = false;          // lo que vino de la hoja ya está guardado
     }
     // Encima, el borrador local si trae más cosas (quedó sin guardar)
     if(b && b.items && b.items.length > _itemsHoy.length){
       _itemsHoy = b.items.map(x=>itemDe(x.a, x.g));
-      _creatinaHoy = _creatinaHoy || !!b.creatina;
       _sinGuardar = true;           // el borrador traía cosas sin guardar
     }
   }
@@ -131,7 +139,7 @@ function renderIngestaHoy(){
     <div class="log-hoy">
       <div class="log-tot">
         <div class="lt-big"><strong>${t.pa+t.pv} g</strong><span>proteína hoy</span></div>
-        ${(!_itemsHoy.length && !_creatinaHoy) ? '' :
+        ${(!_itemsHoy.length) ? '' :
           (_sinGuardar
             ? '<div class="log-estado pend">● sin guardar</div>'
             : '<div class="log-estado ok">✓ guardado</div>')}
@@ -161,9 +169,6 @@ function renderIngestaHoy(){
                 aria-label="${k+1} vasos"></button>`).join('')}
           </div>
         </div>
-        <button class="crea-btn ${_creatinaHoy?'on':''}" onclick="toggleCreatina()">
-          💪 Creatina ${_creatinaHoy?'✓':''}
-        </button>
       </div>
 
       <button class="blk-btn primary log-guardar" id="ing-guardar" onclick="guardarIngestaHoy()">
@@ -203,11 +208,6 @@ async function setAgua(ml){
     if(caja) caja.style.opacity = '1';
     alert('No se pudo guardar el agua: ' + e.message);
   }
-}
-function toggleCreatina(){
-  _creatinaHoy = !_creatinaHoy;
-  marcarCambio();
-  renderIngestaHoy();
 }
 
 /* ── Dictado: usa el reconocimiento del navegador y luego Gemini ── */
@@ -444,7 +444,6 @@ async function guardarIngestaHoy(){
         );
         if(sumar){
           faltan.forEach(x=>_itemsHoy.push(x));
-          _creatinaHoy = _creatinaHoy || !!serv.creatina;
           guardarBorradorLog();
           renderIngestaHoy();
         }
@@ -467,8 +466,7 @@ async function guardarIngestaHoy(){
   // Sin `agua`: la escribe setAgua en el acto y guardarIngesta conserva lo que
   // no se le manda. Mandarla desde aqui era lo que borraba los vasos de Hoy.
   const datos = {action:'guardarIngesta', fecha: hoyISO(),
-    prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes, kcal:t.kcal,
-    creatina:_creatinaHoy?1:0, detalle};
+    prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes, kcal:t.kcal, detalle};
 
   btn.textContent = 'Guardando…';
   try {
@@ -476,7 +474,7 @@ async function guardarIngestaHoy(){
     const i = INGESTA.findIndex(x=>x.fecha===datos.fecha);
     const nuevo = {fecha:datos.fecha, nota:'', detalle,
       prot_animal:t.pa, prot_vegetal:t.pv, shakes:t.shakes,
-      agua:aguaLog(), creatina:datos.creatina, kcal:t.kcal};
+      agua:aguaLog(), creatina:(ingestaDe(datos.fecha)||{}).creatina||0, kcal:t.kcal};
     if(i>=0) INGESTA[i] = nuevo; else INGESTA.push(nuevo);
     INGESTA.sort((a,b)=>a.fecha.localeCompare(b.fecha));
     limpiarBorradorLog();   // ya está en la hoja, el borrador sobra
@@ -511,7 +509,7 @@ function semanasIngesta(){
     if(!sem[k]) sem[k] = {inicio:k, dias:0, protA:0, protV:0, shakes:0, agua:0, creatina:0};
     const s = sem[k];
     s.dias++; s.protA += x.prot_animal; s.protV += x.prot_vegetal;
-    s.shakes += x.shakes; s.agua += x.agua; s.creatina += x.creatina?1:0;
+    s.shakes += x.shakes; s.agua += x.agua; s.creatina += creatinaEn(x.fecha) ? 1 : 0;
   });
 
   // Composición: medición más cercana al inicio y al final de cada semana
@@ -552,63 +550,171 @@ function semanasIngesta(){
   });
 }
 
+/* Las tarjetas dicen si el numero es bueno o malo. Mismo lenguaje de tres
+   tramos que la tarjeta de masa magra en Composicion: rojo bajo el suelo,
+   ambar cerca, verde dentro. Un numero sin juicio no sirve de nada: 0.68 g/kg
+   se leia igual de neutro que "2/3 dias con creatina", y es la cifra de la que
+   depende el suelo de masa magra.
+   protObjetivo, VASO_ML y VASOS_DIA viven en app-tracker.js, que carga
+   DESPUES: de ahi las guardas con typeof. */
+function metaProteina(){
+  return (typeof protObjetivo === 'function') ? protObjetivo() : null;
+}
+function metaAguaMl(){
+  return (typeof VASO_ML === 'number' && typeof VASOS_DIA === 'number')
+    ? VASO_ML * VASOS_DIA : 2000;
+}
+function posEnEscala(v, tope){
+  if(!tope) return 1;
+  return Math.max(1, Math.min(99, +(v / tope * 100).toFixed(1)));
+}
+
+function tarjetaProteina(prot, obj, peso, pa, pv){
+  if(!obj){
+    return `<div class="pc-card">
+      <div class="pc-label">Proteina al dia</div>
+      <div class="pc-fila"><span class="pc-num">${prot}</span><span class="pc-uni">g</span></div>
+      <div class="pc-pie">Hace falta una medicion de peso para saber tu objetivo.</div>
+    </div>`;
+  }
+  const alerta = Math.round(obj.min * 0.75);
+  const estado = prot < alerta ? 'mal' : (prot < obj.min ? 'ojo' : 'bien');
+  const chip = prot < obj.min ? `faltan ${obj.min - prot} g`
+             : (prot > obj.max ? 'por encima del rango' : 'en rango');
+  const gxkg = peso ? (prot/peso).toFixed(2) : null;
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Proteina al dia <span class="pc-sub">&middot; suelo ${obj.min} g</span></div>
+    <div class="pc-fila">
+      <span class="pc-num">${prot}</span><span class="pc-uni">g</span>
+      <span class="pc-chip ${estado}">${chip}</span>
+    </div>
+    <div class="pc-tramos">
+      <i class="t-mal" style="flex:${alerta}"></i>
+      <i class="t-ojo" style="flex:${obj.min - alerta}"></i>
+      <i class="t-bien" style="flex:${Math.max(1, obj.max - obj.min)}"></i>
+      <b style="left:${posEnEscala(prot, obj.max)}%"></b>
+    </div>
+    <div class="pc-pie">${gxkg ? gxkg + ' g/kg &middot; ' : ''}el rango es
+      ${obj.min}&ndash;${obj.max} g &middot; animal ${pa} g, vegetal ${pv} g</div>
+  </div>`;
+}
+
+function tarjetaAgua(agua){
+  const meta = metaAguaMl();
+  const vasos = Math.round(agua / (typeof VASO_ML === 'number' ? VASO_ML : 250));
+  const total = (typeof VASOS_DIA === 'number' ? VASOS_DIA : 8);
+  const estado = agua < meta*0.5 ? 'mal' : (agua < meta ? 'ojo' : 'bien');
+  const faltan = Math.max(0, total - vasos);
+  const chip = agua >= meta ? 'meta cubierta'
+             : `faltan ${faltan} ${faltan===1?'vaso':'vasos'}`;
+  return `
+  <div class="pc-card">
+    <div class="pc-label">Agua al dia <span class="pc-sub">&middot; meta ${(meta/1000).toFixed(1)} L</span></div>
+    <div class="pc-fila">
+      <span class="pc-num">${(agua/1000).toFixed(1)}</span><span class="pc-uni">L</span>
+      <span class="pc-chip ${estado}">${chip}</span>
+    </div>
+    <div class="pc-tramos">
+      <i class="t-mal" style="flex:50"></i>
+      <i class="t-ojo" style="flex:50"></i>
+      <i class="t-bien" style="flex:25"></i>
+      <b style="left:${posEnEscala(agua, meta*1.25)}%"></b>
+    </div>
+    <div class="pc-pie">${vasos} de ${total} vasos &middot; se guarda sola al tocar un vaso</div>
+  </div>`;
+}
+
+/* La frase de arriba: la respuesta a "voy bien hoy" antes de pedirle nada. */
+function lineaIngesta(prot, obj, agua){
+  const partes = [];
+  if(obj){
+    partes.push(prot < obj.min
+      ? `te faltan ${obj.min - prot} g de proteina para tu suelo de ${obj.min}`
+      : `proteina en rango (${obj.min}\u2013${obj.max} g)`);
+  }
+  const meta = metaAguaMl();
+  partes.push(agua >= meta ? 'agua cubierta'
+            : `agua ${(agua/1000).toFixed(1)} de ${(meta/1000).toFixed(1)} L`);
+  return partes.join(' \u00b7 ');
+}
+
 function renderIngestaResumen(){
   const cont = document.getElementById('ingesta-resumen');
   if(!cont) return;
   if(!INGESTA.length){
     cont.innerHTML = `<div class="ing-vacio">
-      Aún no hay registros. Anota unos días y aquí vas a ver si tu ingesta de
-      proteína está sosteniendo tu músculo.</div>`;
+      Aun no hay registros. Anota unos dias y aqui vas a ver si tu ingesta de
+      proteina esta sosteniendo tu musculo.</div>`;
     return;
   }
   const ult7 = INGESTA.slice(-7);
-  const prom = k => Math.round(ult7.reduce((s,x)=>s+x[k],0)/ult7.length);
-  const protProm = prom('prot_animal')+prom('prot_vegetal');
+  const prom = k => Math.round(ult7.reduce((s,x)=>s+(x[k]||0),0)/ult7.length);
+  const pa = prom('prot_animal'), pv = prom('prot_vegetal');
+  const prot = pa + pv;
+  const agua = prom('agua');
   const peso = DATA.length ? DATA[DATA.length-1].peso : null;
-  const gxkg = peso ? (protProm/peso).toFixed(2) : null;
-  const diasCreatina = ult7.filter(x=>x.creatina).length;
+  const obj  = metaProteina();
+
+  const dias = ult7.map(x=>x.fecha);
+  const conCrea = dias.filter(creatinaEn).length;
+  const crea = creatinaEnProtocolo()
+    ? `<div class="ing-stats" style="margin-top:10px">
+         <div class="ing-stat"><strong>${conCrea}/${ult7.length}</strong><span>dias con creatina</span></div>
+       </div>` : '';
 
   cont.innerHTML = `
-    <div class="ing-stats">
-      <div class="ing-stat"><strong>${protProm} g</strong><span>proteína al día</span></div>
-      ${gxkg ? `<div class="ing-stat"><strong>${gxkg}</strong><span>g por kg de peso</span></div>` : ''}
-      <div class="ing-stat"><strong>${prom('agua')} ml</strong><span>agua al día</span></div>
-      <div class="ing-stat"><strong>${diasCreatina}/${ult7.length}</strong><span>días con creatina</span></div>
-    </div>
-    <div class="ing-nota">Promedios de los últimos ${ult7.length} días registrados.
-      Animal ${prom('prot_animal')} g · vegetal ${prom('prot_vegetal')} g.</div>`;
+    <div style="font-size:.86rem;color:#1b4332;font-weight:700;line-height:1.5;
+                margin:0 0 11px">${lineaIngesta(prot, obj, agua)}</div>
+    <div class="pc-grid">${tarjetaProteina(prot, obj, peso, pa, pv)}${tarjetaAgua(agua)}</div>
+    ${crea}
+    <div class="ing-nota">Promedios de los ultimos ${ult7.length} dias registrados.</div>`;
 }
 
+/* UN SOLO EJE. Antes iba proteina a la izquierda y musculo a la derecha: con
+   dos escalas elegidas a mano, "van juntas" lo decide el eje y no el dato. El
+   musculo se lee en la columna delta de la tabla, que compara contra la
+   medicion anterior de verdad.
+   Con menos de dos semanas no se dibuja nada: una sola barra ocupando todo el
+   ancho no es una grafica. */
 function initGraficaIngesta(){
   const el = document.getElementById('cIngesta');
+  const card = el ? el.closest('.chart-card') : null;
   if(!el) return;
   const sem = semanasIngesta();
-  if(!sem.length) return;
+  if(sem.length < 2){
+    if(card) card.style.display = 'none';
+    return;
+  }
+  if(card) card.style.display = '';
+
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const etiqueta = s => {
     const d = new Date(s.inicio+'T00:00:00');
-    const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     return `${d.getDate()} ${MESES[d.getMonth()]}`;
   };
+  const obj = metaProteina();
+  const datos = [
+    {type:'bar', label:'Proteina animal g/dia', data:sem.map(s=>s.protADia),
+     backgroundColor:'#c98a7a', stack:'p', borderRadius:3},
+    {type:'bar', label:'Proteina vegetal g/dia', data:sem.map(s=>s.protVDia),
+     backgroundColor:'#7fb3a0', stack:'p', borderRadius:3},
+  ];
+  if(obj){
+    datos.push({type:'line', label:`Suelo ${obj.min} g`,
+      data:sem.map(()=>obj.min), borderColor:'#b91c1c', borderWidth:1.5,
+      borderDash:[5,4], pointRadius:0, fill:false});
+  }
+
   if(chartReg.cIngesta) chartReg.cIngesta.destroy();
   chartReg.cIngesta = new Chart(el, {
-    type:'bar',
-    data:{labels:sem.map(etiqueta), datasets:[
-      {type:'bar', label:'Proteína animal g/día', data:sem.map(s=>s.protADia),
-       backgroundColor:'#e74c3c99', stack:'p', yAxisID:'yP'},
-      {type:'bar', label:'Proteína vegetal g/día', data:sem.map(s=>s.protVDia),
-       backgroundColor:'#52b78899', stack:'p', yAxisID:'yP'},
-      {type:'line', label:'Músculo SMM kg', data:sem.map(s=>s.smm),
-       borderColor:'#2980b9', backgroundColor:'#2980b922', tension:.3,
-       spanGaps:true, yAxisID:'ySMM'},
-    ]},
+    data:{labels:sem.map(etiqueta), datasets:datos},
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
       scales:{
-        x:{stacked:true, grid:{color:GRID}, ticks:{font:{size:9}}},
-        yP:{stacked:true, position:'left', grid:{color:GRID}, ticks:{font:{size:9}},
-            title:{display:true,text:'g proteína/día',font:{size:9}}},
-        ySMM:{position:'right', grid:{drawOnChartArea:false}, ticks:{font:{size:9}},
-              title:{display:true,text:'músculo kg',font:{size:9}}},
+        x:{stacked:true, grid:{display:false}, ticks:{font:{size:9}}},
+        y:{stacked:true, beginAtZero:true, grid:{color:GRID}, ticks:{font:{size:9}},
+           title:{display:true,text:'g proteina/dia',font:{size:9}}},
       }}
   });
 }
@@ -619,6 +725,7 @@ function renderIngestaTabla(){
   const sem = semanasIngesta();
   if(!sem.length){ cont.innerHTML=''; return; }
   const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const hayCrea = creatinaEnProtocolo();
   const filas = [...sem].reverse().map(s=>{
     const d = new Date(s.inicio+'T00:00:00');
     const cls = v => v==null ? '' : v<0 ? 'd-good' : v>0 ? 'd-bad' : '';
@@ -629,7 +736,7 @@ function renderIngestaTabla(){
       <td>${s.protADia}/${s.protVDia}</td>
       <td>${s.shakesDia}</td>
       <td>${(s.aguaDia/1000).toFixed(1)} L</td>
-      <td>${s.creatina}/${s.dias}</td>
+      ${hayCrea ? `<td>${s.creatina}/${s.dias}</td>` : ''}
       <td class="${cls(s.dGrasa)}">${s.dGrasa!=null?(s.dGrasa>0?'+':'')+s.dGrasa:'—'}</td>
       <td class="${clsM(s.dSMM)}">${s.dSMM!=null?(s.dSMM>0?'+':'')+s.dSMM:'—'}</td>
     </tr>`;
@@ -656,7 +763,7 @@ function renderIngestaTabla(){
     ${insight}
     <div class="table-scroll"><table>
       <thead><tr><th>Semana</th><th>Proteína</th><th>An/Veg</th><th>Batidos</th>
-        <th>Agua</th><th>Creatina</th><th>Δ Grasa</th><th>Δ Músculo</th></tr></thead>
+        <th>Agua</th>${hayCrea ? '<th>Creatina</th>' : ''}<th>Δ Grasa</th><th>Δ Músculo</th></tr></thead>
       <tbody>${filas}</tbody>
     </table></div>
     <div class="ing-caveat" style="margin-top:9px">Δ compara la medición de esa semana
