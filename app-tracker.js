@@ -750,6 +750,17 @@ function lineaEstado(){
   return partes.join(' · ');
 }
 
+/* switchPlanTab necesita el boton que se pulso, asi que se busca en el
+   DOM. Y va en un frame aparte: la seccion tiene que estar visible antes
+   de que se le cambie la pestaña. */
+function irAIngesta(){
+  gotoSection('planes');
+  requestAnimationFrame(() => {
+    const btn = document.querySelector('#plan-tab-nav .tab-btn[onclick*="ingesta"]');
+    if(btn) switchPlanTab('ingesta', btn);
+  });
+}
+
 function fechaLarga(){
   const D = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
   const M = ['enero','febrero','marzo','abril','mayo','junio','julio',
@@ -814,7 +825,7 @@ function renderHoy(){
       <div class="hoy-barra"><div class="hoy-barra-fill${p >= o.min ? ' ok' : ''}"
         style="width:${pct}%"></div></div>
       <button class="blk-btn" style="width:100%;margin-top:10px"
-        onclick="gotoSection('planes')">Registrar comida</button>
+        onclick="irAIngesta()">Registrar comida</button>
     </div>`;
 
   host.innerHTML = `
@@ -824,7 +835,7 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      ${bloque}${agua}${tarjetaMovimiento()}${prot}
+      ${bloque}${agua}${tarjetaMovimiento()}${prot}${tarjetaTirze()}
     </div>`;
 }
 
@@ -1111,4 +1122,226 @@ async function terminarCardio(nombre, min){
   } catch(e){
     msg.className = 'form-msg err'; msg.textContent = e.message;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TIRZEPATIDA
+   ---------------------------------------------------------------
+   El efecto de la inyeccion no es plano: el apetito se suprime mas
+   los primeros dias y afloja hacia el final. Por eso la ingesta se
+   mira por DIA DEL CICLO, no por dia de la semana — comparar lunes
+   con lunes mezcla dias del ciclo distintos.
+
+   La zona rota para no pinchar siempre en el mismo sitio, y `dosis`
+   permite ver el escalado contra el ritmo de perdida de grasa.
+   ═══════════════════════════════════════════════════════════════ */
+const CICLO_DIAS = 7;
+const ZONAS = ['Abdomen izq.', 'Abdomen der.', 'Muslo izq.', 'Muslo der.'];
+const DOSIS = [2.5, 5, 7.5, 10, 12.5, 15];
+
+/* Ingesta muy por debajo del objetivo, varios dias seguidos, mas bypass
+   es el patron de riesgo de deficit de tiamina: se agota en semanas, no
+   en años. Este umbral no es diagnostico, es para que se hable en
+   consulta antes de que sea un problema. */
+const DIAS_INGESTA_BAJA = 3;
+const UMBRAL_PROT_BAJA  = 0.5;   // fraccion del objetivo minimo
+
+function ultimaInyeccion(){
+  return (TIRZE || []).length ? TIRZE[TIRZE.length-1] : null;
+}
+
+/* Dia del ciclo: 1 el dia de la inyeccion. null si no hay ninguna. */
+function diaDelCiclo(iso){
+  const u = ultimaInyeccion();
+  if(!u) return null;
+  const d = diasDesde2(u.fecha, iso || hoyISO());
+  return d < 0 ? null : d + 1;
+}
+
+function diasDesde2(isoA, isoB){
+  const a = isoA.split('-'), b = isoB.split('-');
+  return Math.round((Date.UTC(+b[0], +b[1]-1, +b[2]) -
+                     Date.UTC(+a[0], +a[1]-1, +a[2])) / 86400000);
+}
+
+/* Cuando toca la siguiente, y si va con retraso. */
+function proximaInyeccion(){
+  const u = ultimaInyeccion();
+  if(!u) return null;
+  const transcurridos = diasDesde2(u.fecha, hoyISO());
+  const faltan = CICLO_DIAS - transcurridos;
+  const p = u.fecha.split('-');
+  const f = new Date(Date.UTC(+p[0], +p[1]-1, +p[2] + CICLO_DIAS));
+  const D = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  return {faltan, dia: D[f.getUTCDay()], hoy: faltan === 0,
+          tarde: faltan < 0, transcurridos};
+}
+
+function zonaSugerida(){
+  const u = ultimaInyeccion();
+  if(!u || !u.zona) return ZONAS[0];
+  const i = ZONAS.indexOf(u.zona);
+  return ZONAS[i < 0 ? 0 : (i+1) % ZONAS.length];
+}
+
+function dosisActual(){
+  const u = ultimaInyeccion();
+  return u && u.dosis ? u.dosis : null;
+}
+
+/* ── La tarjeta de Hoy ───────────────────────────────────────── */
+function tarjetaTirze(){
+  const u = ultimaInyeccion();
+
+  if(!u){
+    return `
+      <div class="hoy-card">
+        <div class="hoy-hdr"><span>💉 Tirzepatida</span></div>
+        <div class="hoy-sub">Sin registrar todavía. Con la primera inyección la app
+          empieza a contar el ciclo y a ordenar tu comida por día del ciclo.</div>
+        <button class="blk-btn" style="width:100%;margin-top:9px"
+          onclick="abrirInyeccion()">Registrar inyección</button>
+      </div>`;
+  }
+
+  const p = proximaInyeccion();
+  const ciclo = diaDelCiclo();
+
+  if(p.hoy || p.tarde){
+    return `
+      <div class="hoy-card" style="border-color:#f0b429">
+        <div class="hoy-hdr"><span>💉 Tirzepatida</span>
+          <span class="hoy-chip">${p.tarde ? Math.abs(p.faltan) + ' días tarde' : 'hoy'}</span></div>
+        <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}toca en
+          <strong>${esc(zonaSugerida())}</strong></div>
+        <button class="blk-btn primary" style="width:100%;margin-top:9px"
+          onclick="abrirInyeccion()">Registrar inyección</button>
+      </div>`;
+  }
+
+  return `
+    <div class="hoy-card">
+      <div class="hoy-hdr"><span>💉 Tirzepatida</span>
+        <span class="hoy-sub">día ${ciclo} del ciclo</span></div>
+      <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}la siguiente,
+        el <strong>${esc(p.dia)}</strong>${p.faltan === 1 ? ' (mañana)' : ` (en ${p.faltan} días)`}.</div>
+    </div>`;
+}
+
+/* ── El formulario ───────────────────────────────────────────── */
+function abrirInyeccion(){
+  const zona = zonaSugerida();
+  const dosis = dosisActual();
+
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal">
+      <div class="blk-modal-hdr"><span>💉 Inyección</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        <div id="ty-msg" class="form-msg info">
+          La zona propuesta es la siguiente de la rotación. Cámbiala si pinchaste en otra.
+        </div>
+        <div class="form-campo" style="max-width:190px">
+          <label for="ty-fecha">Fecha</label>
+          <input type="date" id="ty-fecha" value="${hoyISO()}" max="${hoyISO()}">
+        </div>
+        <div class="form-campo">
+          <label for="ty-dosis">Dosis <span class="op">mg</span></label>
+          <select id="ty-dosis">
+            ${DOSIS.map(d => `<option value="${d}"${d === dosis ? ' selected' : ''}>${d} mg</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-campo">
+          <label for="ty-zona">Zona</label>
+          <select id="ty-zona">
+            ${ZONAS.map(z => `<option${z === zona ? ' selected' : ''}>${z}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-campo">
+          <label for="ty-efectos">Cómo cayó <span class="op">opcional</span></label>
+          <input id="ty-efectos" placeholder="náusea, sin apetito, bien…">
+        </div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Cancelar</button>
+        <button class="blk-btn primary" id="ty-guardar" onclick="guardarInyeccionForm()">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function guardarInyeccionForm(){
+  const msg = document.getElementById('ty-msg');
+  const btn = document.getElementById('ty-guardar');
+  const val = id => (document.getElementById(id) || {}).value || '';
+  const datos = {action:'inyeccion', fecha: val('ty-fecha'), dosis: val('ty-dosis'),
+                 zona: val('ty-zona'), efectos: val('ty-efectos').trim()};
+
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const r = await api(datos);
+    if(!Array.isArray(TIRZE)) TIRZE = [];
+    const i = TIRZE.findIndex(x => x.fecha === r.fecha);
+    const fila = {fecha:r.fecha, dosis:Number(datos.dosis), zona:datos.zona,
+                  efectos:datos.efectos, nota:''};
+    if(i >= 0) TIRZE[i] = fila; else TIRZE.push(fila);
+    TIRZE.sort((a,b) => a.fecha.localeCompare(b.fecha));
+
+    msg.className = 'form-msg ok';
+    msg.textContent = `✓ ${r.actualizado ? 'Corregida' : 'Guardada'}. Día 1 del ciclo.`;
+    btn.textContent = '✓ Guardada';
+    renderHoy();
+    setTimeout(cerrarForm, 1000);
+  } catch(e){
+    msg.className = 'form-msg err'; msg.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+/* ── La ingesta por día del ciclo ────────────────────────────── */
+/* Comparar lunes con lunes mezcla dias del ciclo distintos. Esto
+   promedia por dia del ciclo, que es donde se ve el patron real. */
+function ingestaPorCiclo(){
+  if(!(TIRZE || []).length || !(INGESTA || []).length) return null;
+  const acum = {};
+  INGESTA.forEach(d => {
+    // la inyeccion vigente para ese dia es la ultima anterior o igual
+    let ref = null;
+    for(const t of TIRZE){ if(t.fecha <= d.fecha) ref = t; else break; }
+    if(!ref) return;
+    const dia = diasDesde2(ref.fecha, d.fecha) + 1;
+    if(dia < 1 || dia > CICLO_DIAS) return;
+    const prot = (d.prot_animal || 0) + (d.prot_vegetal || 0);
+    if(!acum[dia]) acum[dia] = {dias:0, prot:0, kcal:0};
+    acum[dia].dias++; acum[dia].prot += prot; acum[dia].kcal += (d.kcal || 0);
+  });
+  const out = [];
+  for(let i = 1; i <= CICLO_DIAS; i++){
+    const a = acum[i];
+    out.push({dia:i, n: a ? a.dias : 0,
+              prot: a ? Math.round(a.prot/a.dias) : null,
+              kcal: a ? Math.round(a.kcal/a.dias) : null});
+  }
+  return out;
+}
+
+/* Aviso de ingesta baja sostenida. No es diagnostico: es para que se
+   hable en consulta antes de que sea un problema. */
+function avisoIngestaBaja(){
+  if(!(INGESTA || []).length) return null;
+  const o = protObjetivo();
+  const umbral = o.min * UMBRAL_PROT_BAJA;
+  const orden = INGESTA.slice().sort((a,b) => b.fecha.localeCompare(a.fecha));
+  let seguidos = 0;
+  for(const d of orden){
+    const prot = (d.prot_animal || 0) + (d.prot_vegetal || 0);
+    if(prot > 0 && prot < umbral) seguidos++;
+    else break;
+  }
+  if(seguidos < DIAS_INGESTA_BAJA) return null;
+  return `${seguidos} días seguidos por debajo de ${Math.round(umbral)} g de proteína. ` +
+         `Con el bypass, la ingesta muy baja sostenida es el patrón de riesgo de ` +
+         `déficit de tiamina, que se agota en semanas y no en años. Merece mencionarlo ` +
+         `en consulta.`;
 }

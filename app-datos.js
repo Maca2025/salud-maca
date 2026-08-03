@@ -62,6 +62,10 @@ let HIST = [];
 
 /* Sesiones de ejercicio. Se registra la conducta, no el resultado:
    el peso y la masa magra van con retraso, esto es inmediato. */
+/* Inyecciones de tirzepatida. Con la fecha, la ingesta se puede mirar
+   por dia del ciclo en vez de por dia de la semana. */
+let TIRZE = [];
+
 let EJER = [];
 
 let PERIM = [];
