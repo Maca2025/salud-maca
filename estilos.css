@@ -1237,3 +1237,27 @@ tr.recomp-win td{background:#f0fdf4;}
   .hoy-vasos .vaso{height:44px;}
   .hoy-sups label{padding:11px 4px;font-size:.95rem;}
 }
+
+/* ══════════════════════════════════════════════════════════
+   CSS MODULE: EJERCICIO
+   Las tres opciones de movimiento y la sesión con instrucciones.
+   ══════════════════════════════════════════════════════════ */
+.mov-ops{display:flex;flex-direction:column;gap:8px;}
+.mov-op{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:11px 13px;border:1px solid #dde3df;border-radius:10px;background:#fff;
+  cursor:pointer;font-family:inherit;}
+.mov-op:active{transform:scale(.99);}
+.mov-op.suelo{background:#f7f9f8;border-color:#e8e8e6;}
+.mov-op .mov-ico{font-size:1.15rem;flex-shrink:0;}
+.mov-op strong{display:block;font-size:.88rem;color:#1b4332;font-weight:700;}
+.mov-op.suelo strong{color:#666;}
+.mov-op em{display:block;font-style:normal;font-size:.72rem;color:#888;margin-top:2px;}
+.mov-hecho{font-size:.88rem;color:#15803d;font-weight:700;padding:5px 2px;}
+
+.fz-lista{margin:12px 0 0;padding-left:22px;}
+.fz-lista li{margin-bottom:11px;font-size:.88rem;color:#1b4332;font-weight:700;}
+.fz-lista li span{display:block;font-weight:400;font-size:.8rem;color:#555;
+  line-height:1.55;margin-top:3px;}
+.fz-aviso{margin-top:12px;padding:9px 12px;background:#fffbeb;border-left:3px solid #f59e0b;
+  font-size:.76rem;color:#78350f;line-height:1.55;}
+.fz-otras{margin-top:11px;font-size:.74rem;color:#888;}

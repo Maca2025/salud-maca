@@ -60,6 +60,10 @@ let VERSION_API = '';
    pantalla Hoy necesita saber que hay marcado sin pedirlo otra vez. */
 let HIST = [];
 
+/* Sesiones de ejercicio. Se registra la conducta, no el resultado:
+   el peso y la masa magra van con retraso, esto es inmediato. */
+let EJER = [];
+
 let PERIM = [];
 let ALTURA_CM = 163;
 let SD = {}, SR = {}, SSECTIONS = [], SUPS = [];

@@ -82,6 +82,7 @@ function hidratar(d){
   if(d.suelo)    SUELO = Object.assign({}, SUELO, d.suelo);
   VERSION_API = d.version || '';
   HIST  = d.historial  || [];
+  EJER  = d.ejercicio   || [];
   PERIM = d.perimetros || [];
   if(d.alturaCm > 0) ALTURA_CM = d.alturaCm;
 

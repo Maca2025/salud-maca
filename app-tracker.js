@@ -824,6 +824,291 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      ${bloque}${agua}${prot}
+      ${bloque}${agua}${tarjetaMovimiento()}${prot}
     </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EJERCICIO
+   ---------------------------------------------------------------
+   El objetivo nuevo (suelo de 47 kg de masa magra) depende entero de
+   dos cosas que la app no veia: fuerza y proteina. Esto es la mitad.
+
+   TRES DECISIONES DE DISEÑO, TODAS DELIBERADAS
+
+   1. Se registra la CONDUCTA, no el resultado. Inmediata y suya.
+   2. El contador es "N de los ultimos 14 dias", no una racha. Baja y
+      sube, pero NUNCA se rompe: un dia perdido cuesta un punto, no el
+      trabajo de dos semanas. Las rachas que se resetean a cero son de
+      lo que mejor predice que alguien abandona.
+   3. La opcion "suelo" —5 minutos de rebounder— cuenta como dia
+      activo. Un dia malo con cinco minutos mantiene el habito; con
+      cero lo mata. Es lo mas importante de esta seccion y parece lo
+      menos.
+
+   Y el cardio NO es la opcion menor: es el entrenamiento para el
+   paddle. Matiz suyo, y mejor motivacion que "gasto calorico".
+   ═══════════════════════════════════════════════════════════════ */
+const VENTANA_HABITO   = 14;   // dias del contador que nunca se rompe
+const SUELO_FUERZA_SEM = 2;    // sesiones de fuerza por semana
+const SUELO_DIAS_SEM   = 4;    // dias con algo de movimiento
+const SEG_INICIAL      = 30;   // segundos por posicion al empezar
+const SEG_META         = 60;   // cuando se aguanten 45 comodas, subir
+
+/* Tres sesiones que rotan. En un ciclo completo queda cubierto empuje,
+   traccion, piernas, core anterior, lateral y posterior, y tobillo.
+   Las instrucciones van en pantalla porque es donde hacen falta. */
+const SESIONES = [
+  {id:'A', nombre:'Empuje y core', ejercicios:[
+    {n:'Sentadilla en la pared',
+     c:'Espalda apoyada en la pared, pies separados y algo adelantados. Baja hasta donde aguantes sin dolor y sostén ahí. Cuanto más bajes, más duro.'},
+    {n:'Empuje isométrico',
+     c:'De pie frente a la pared o la encimera, manos a la altura del pecho. Empuja como si quisieras moverla y mantén la fuerza constante.'},
+    {n:'Plancha en antebrazos',
+     c:'Antebrazos y rodillas en el suelo, cuerpo en línea recta de la cabeza a las rodillas. Abdomen firme; la cadera ni sube ni se cae.'},
+    {n:'Puente de glúteos',
+     c:'Boca arriba, rodillas dobladas, pies apoyados. Sube la cadera hasta alinear rodillas, cadera y hombros. Aprieta los glúteos y sostén.'}]},
+
+  {id:'B', nombre:'Tracción y espalda', ejercicios:[
+    {n:'Remo con toalla',
+     c:'Toalla enrollada, un extremo en cada mano, brazos al frente. Tira hacia fuera con las dos manos a la vez, como si quisieras romperla. Codos cerca del cuerpo.'},
+    {n:'Superman',
+     c:'Boca abajo, brazos estirados al frente. Despega a la vez pecho, brazos y piernas unos centímetros. Mirada al suelo, cuello relajado.'},
+    {n:'Bisagra de cadera',
+     c:'De pie, rodillas algo dobladas. Lleva la cadera atrás y baja el tronco con la espalda recta hasta notar la parte de atrás del muslo. Sostén ahí.'},
+    {n:'Plancha lateral',
+     c:'De lado, antebrazo y rodilla de abajo en el suelo. Sube la cadera hasta alinear el cuerpo. Mitad del tiempo por cada lado.'}]},
+
+  {id:'C', nombre:'Piernas y tobillo', ejercicios:[
+    {n:'Zancada sostenida',
+     c:'Un pie adelante y otro atrás. Baja la rodilla de atrás sin llegar al suelo y sostén. Mitad del tiempo por pierna.'},
+    {n:'Elevación de talones',
+     c:'De pie, sube de puntillas todo lo que puedas y sostén arriba. Si pierdes el equilibrio, apoya un dedo en la pared.'},
+    {n:'Media sentadilla',
+     c:'Sin pared. Pies al ancho de las caderas, baja a media altura con el peso en los talones y sostén.'},
+    {n:'Plancha con apoyo',
+     c:'Plancha en antebrazos con rodillas apoyadas. Levanta un brazo unos segundos y cambia. El reto es que la cadera no rote.'}]}
+];
+
+const CARDIO = [
+  {n:'Elíptica',   min:20, c:'Ritmo al que puedas hablar con frases cortas.'},
+  {n:'Bicicleta',  min:20, c:'Ritmo al que puedas hablar con frases cortas.'},
+  {n:'Rebounder',  min:15, c:'Rebote suave, sin despegar los pies del todo.'}
+];
+
+const AVISO_RESPIRAR =
+  'Respira durante el aguante. Aguantar la respiración sube mucho la presión, ' +
+  'y con la quetiapina eso no interesa. Si algo duele — no molesta, duele — se para.';
+
+/* ── Lectura ─────────────────────────────────────────────────── */
+function diasDesde(iso){
+  const a = iso.split('-'), h = hoyISO().split('-');
+  return Math.round((Date.UTC(+h[0], +h[1]-1, +h[2]) -
+                     Date.UTC(+a[0], +a[1]-1, +a[2])) / 86400000);
+}
+
+function sesionesRecientes(dias){
+  return (EJER || []).filter(e => {
+    const d = diasDesde(e.fecha);
+    return d >= 0 && d < dias;
+  });
+}
+
+/* El contador que no se rompe: dias distintos con algo de movimiento. */
+function habito(){
+  const r = sesionesRecientes(VENTANA_HABITO);
+  const dias = new Set(r.map(e => e.fecha));
+  const fuerza = r.filter(e => e.tipo === 'fuerza').length;
+  return {dias: dias.size, ventana: VENTANA_HABITO, fuerza,
+          sesiones: r.length};
+}
+
+/* Cuantas de fuerza en los ultimos 28 dias: la misma ventana que la
+   masa magra, a proposito. Es lo que cierra el circulo. */
+function fuerza28(){
+  return sesionesRecientes(28).filter(e => e.tipo === 'fuerza').length;
+}
+
+function hechoHoy(){
+  return (EJER || []).filter(e => e.fecha === hoyISO());
+}
+
+/* Rota A → B → C → A segun la ultima sesion de fuerza registrada. */
+function proximaSesion(){
+  const f = (EJER || []).filter(e => e.tipo === 'fuerza');
+  if(!f.length) return SESIONES[0];
+  const ult = f[f.length-1].actividad || '';
+  const i = SESIONES.findIndex(s => ult.indexOf('Sesión ' + s.id) === 0 ||
+                                    ult.indexOf(s.id + ' ·') === 0);
+  return SESIONES[i < 0 ? 0 : (i+1) % SESIONES.length];
+}
+
+/* El ancla: "despues de que". Engancharlo a algo que ya se hace es lo
+   unico barato con evidencia decente para arrancar un habito, y ella
+   ya tiene cinco anclas diarias funcionando — los bloques. */
+function ultimaAncla(){
+  const con = (EJER || []).filter(e => e.ancla);
+  return con.length ? con[con.length-1].ancla : '';
+}
+
+/* ── Guardado ────────────────────────────────────────────────── */
+async function guardarSesionEjercicio(tipo, actividad, minutos, ancla){
+  await api({action:'ejercicio', fecha:hoyISO(), tipo, actividad,
+             minutos, ancla: ancla || ''});
+  if(!Array.isArray(EJER)) EJER = [];
+  EJER.push({fecha:hoyISO(), tipo, actividad, minutos, ancla: ancla || '', nota:''});
+  renderHoy();
+}
+
+async function hacerSuelo(){
+  const b = document.getElementById('btn-suelo');
+  if(b){ b.disabled = true; b.textContent = 'Guardando…'; }
+  try { await guardarSesionEjercicio('suelo', 'Rebounder', 5, ultimaAncla()); }
+  catch(e){
+    if(b){ b.disabled = false; b.textContent = 'Suelo · 5 min'; }
+    alert('No se pudo guardar: ' + e.message);
+  }
+}
+
+/* ── La tarjeta de Hoy ───────────────────────────────────────── */
+function tarjetaMovimiento(){
+  const h = habito();
+  const hoy = hechoHoy();
+  const s = proximaSesion();
+
+  if(hoy.length){
+    const lista = hoy.map(e =>
+      `<div class="mov-hecho">✓ ${esc(e.actividad || e.tipo)}${
+        e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
+    return `
+      <div class="hoy-card">
+        <div class="hoy-hdr"><span>🏃 Movimiento</span>
+          <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días</span></div>
+        ${lista}
+        <button class="blk-btn" style="width:100%;margin-top:9px"
+          onclick="abrirSesionFuerza()">Añadir otra</button>
+      </div>`;
+  }
+
+  return `
+    <div class="hoy-card">
+      <div class="hoy-hdr"><span>🏃 Movimiento</span>
+        <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días${
+          h.fuerza ? ` · ${h.fuerza} de fuerza` : ''}</span></div>
+      <div class="mov-ops">
+        <button class="mov-op" onclick="abrirSesionFuerza()">
+          <span class="mov-ico">💪</span>
+          <span><strong>Fuerza · 12 min</strong>
+            <em>Sesión ${s.id} — ${esc(s.nombre)} · protege tu masa magra</em></span>
+        </button>
+        <button class="mov-op" onclick="abrirCardio()">
+          <span class="mov-ico">🚴</span>
+          <span><strong>Cardio · 20 min</strong>
+            <em>aguante para el paddle</em></span>
+        </button>
+        <button class="mov-op suelo" id="btn-suelo" onclick="hacerSuelo()">
+          <span class="mov-ico">🔽</span>
+          <span><strong>Suelo · 5 min</strong>
+            <em>rebounder · cuenta como día activo</em></span>
+        </button>
+      </div>
+    </div>`;
+}
+
+/* ── La sesión de fuerza, con las instrucciones en pantalla ──── */
+function abrirSesionFuerza(sid){
+  const s = sid ? SESIONES.find(x => x.id === sid) : proximaSesion();
+  const otras = SESIONES.filter(x => x.id !== s.id);
+
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal">
+      <div class="blk-modal-hdr"><span>💪 Sesión ${s.id} — ${esc(s.nombre)}</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        <div id="fz-msg" class="form-msg info">
+          <strong>${SEG_INICIAL} segundos por posición, dos rondas.</strong>
+          Cuando aguantes 45 s cómoda, sube a ${SEG_META} o busca una versión más dura.
+        </div>
+
+        <ol class="fz-lista">${s.ejercicios.map(e => `
+          <li><strong>${esc(e.n)}</strong><span>${esc(e.c)}</span></li>`).join('')}
+        </ol>
+
+        <div class="fz-aviso">${AVISO_RESPIRAR}</div>
+
+        <div class="form-campo" style="max-width:200px">
+          <label for="fz-ancla">Después de qué <span class="op">opcional</span></label>
+          <input id="fz-ancla" placeholder="del bloque de la comida…"
+            value="${esc(ultimaAncla())}">
+        </div>
+        <div class="fz-otras">¿Prefieres otra? ${otras.map(o =>
+          `<button class="link-btn" onclick="abrirSesionFuerza('${o.id}')">${o.id} · ${esc(o.nombre)}</button>`
+        ).join(' · ')}</div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Ahora no</button>
+        <button class="blk-btn primary" id="fz-hecho"
+          onclick="terminarFuerza('${s.id}','${esc(s.nombre)}')">Hecho</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function terminarFuerza(id, nombre){
+  const btn = document.getElementById('fz-hecho');
+  const msg = document.getElementById('fz-msg');
+  const ancla = (document.getElementById('fz-ancla') || {}).value || '';
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    await guardarSesionEjercicio('fuerza', `Sesión ${id} — ${nombre}`, 12, ancla.trim());
+    msg.className = 'form-msg ok';
+    msg.innerHTML = '✓ Guardada. <strong>Esto es lo que defiende tu masa magra.</strong>';
+    btn.textContent = '✓ Hecho';
+    setTimeout(cerrarForm, 1100);
+  } catch(e){
+    msg.className = 'form-msg err'; msg.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Hecho';
+  }
+}
+
+/* ── Cardio ──────────────────────────────────────────────────── */
+function abrirCardio(){
+  document.getElementById('form-host').innerHTML = `
+  <div class="blk-modal-bg" onmousedown="fondoDown(event,this)" onclick="fondoClick(event,this)">
+    <div class="form-modal">
+      <div class="blk-modal-hdr"><span>🚴 Cardio</span>
+        <button onclick="cerrarForm()">×</button></div>
+      <div class="form-modal-body">
+        <div id="cd-msg" class="form-msg info">
+          Esto es lo que te va a dejar jugar un partido de paddle entero sin morirte.
+        </div>
+        <div class="mov-ops">${CARDIO.map(c => `
+          <button class="mov-op" onclick="terminarCardio('${esc(c.n)}',${c.min})">
+            <span><strong>${esc(c.n)} · ${c.min} min</strong><em>${esc(c.c)}</em></span>
+          </button>`).join('')}
+        </div>
+        <div class="form-campo" style="max-width:200px;margin-top:10px">
+          <label for="cd-ancla">Después de qué <span class="op">opcional</span></label>
+          <input id="cd-ancla" value="${esc(ultimaAncla())}">
+        </div>
+      </div>
+      <div class="blk-modal-foot">
+        <button class="blk-btn ghost" onclick="cerrarForm()">Ahora no</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function terminarCardio(nombre, min){
+  const msg = document.getElementById('cd-msg');
+  const ancla = (document.getElementById('cd-ancla') || {}).value || '';
+  try {
+    await guardarSesionEjercicio('cardio', nombre, min, ancla.trim());
+    msg.className = 'form-msg ok';
+    msg.textContent = `✓ ${nombre}, ${min} min. Guardado.`;
+    setTimeout(cerrarForm, 900);
+  } catch(e){
+    msg.className = 'form-msg err'; msg.textContent = e.message;
+  }
 }
