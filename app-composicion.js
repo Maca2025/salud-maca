@@ -2,6 +2,147 @@
    LOGIC MODULE: COMPOSICIÓN CORPORAL
    KPIs, widget de progreso, stacked bar, gráficas de línea, tablas.
 ================================================================ */
+
+/* ═══════════════════════════════════════════════════════════════
+   HIDRATACIÓN Y MASA MAGRA
+   ---------------------------------------------------------------
+   La bioimpedancia mide AGUA corporal y DERIVA la masa magra
+   dividiéndola entre un coeficiente fijo de hidratación. En esta
+   serie ese coeficiente ha sido siempre ~73.4 % (73.0–73.5), lo que
+   significa que una variación de masa magra a corto plazo es, muy
+   literalmente, una variación de hidratación. No es que el aparato
+   se confunda a veces: el método no puede separar las dos cosas.
+
+   La solución NO es ocultar el dato, sino elegir bien el punto de
+   comparación. La masa magra se compara contra la primera medición
+   que esté al menos VENTANA_MAGRA días atrás, no contra la anterior.
+
+   Ejemplo real: del 20-jul al 27-jul la masa magra marcó −2.2 kg en
+   7 días (−2.2 kg/semana, imposible). Contra el 23-jun, que está a
+   34 días, marca −1.5 kg = −0.31 kg/semana, que sí es plausible.
+   ═══════════════════════════════════════════════════════════════ */
+const VENTANA_MAGRA   = 28;    // días mínimos para interpretar masa magra
+const RITMO_MAGRO_MAX = 0.5;   // kg/semana: techo fisiológico del músculo
+const ECF_UMBRAL      = 0.40;  // por encima: retención de líquidos
+
+function mlgDe(d)    { return +(d.peso - d.grasa).toFixed(1); }
+function aguaDe(d)   { return +(d.ecf + d.icf).toFixed(1); }
+function ratioECF(d) { return +(d.ecf / (d.ecf + d.icf)).toFixed(3); }
+
+/* Masa libre de grasa contra la referencia útil más cercana.
+   null si la serie todavía no tiene VENTANA_MAGRA días de profundidad. */
+function variacionMagra(iHasta){
+  const i = (iHasta == null) ? DATA.length - 1 : iHasta;
+  const b = DATA[i];
+  if(!b || DAYS[i] == null) return null;
+  for(let j = i - 1; j >= 0; j--){
+    if(DAYS[j] == null) continue;
+    const dias = DAYS[i] - DAYS[j];
+    if(dias < VENTANA_MAGRA) continue;
+    const delta = +(mlgDe(b) - mlgDe(DATA[j])).toFixed(1);
+    const ritmo = +(delta / dias * 7).toFixed(2);
+    return {ref:DATA[j], dias, delta, ritmo, estable:Math.abs(ritmo) <= RITMO_MAGRO_MAX};
+  }
+  return null;
+}
+
+/* La lectura corta — la que engaña. Se calcula solo para poder
+   nombrarla y descartarla en voz alta, no para mostrarla como dato. */
+function variacionMagraCorta(iHasta){
+  const i = (iHasta == null) ? DATA.length - 1 : iHasta;
+  if(i < 1 || DAYS[i] == null || DAYS[i-1] == null) return null;
+  const dias = DAYS[i] - DAYS[i-1];
+  if(!dias || dias >= VENTANA_MAGRA) return null;
+  const delta = +(mlgDe(DATA[i]) - mlgDe(DATA[i-1])).toFixed(1);
+  const ritmo = +(delta / dias * 7).toFixed(2);
+  return {dias, delta, ritmo, excede:Math.abs(ritmo) > RITMO_MAGRO_MAX};
+}
+
+/* El coeficiente de hidratación observado, con sus propios datos.
+   Es lo que hace creíble la explicación: no es teoría, es su serie. */
+function coefHidratacion(){
+  const rs = DATA.filter(d => d.peso && d.grasa && (d.peso - d.grasa) > 0)
+                 .map(d => aguaDe(d) / mlgDe(d) * 100);
+  if(!rs.length) return null;
+  return {n:rs.length,
+          media:+(rs.reduce((s,x)=>s+x,0)/rs.length).toFixed(1),
+          min:+Math.min(...rs).toFixed(1),
+          max:+Math.max(...rs).toFixed(1)};
+}
+
+/* ECF sobre agua total. A diferencia del coeficiente de arriba, este SÍ
+   varía de forma informativa: por encima de 0.40 se asocia a retención
+   de líquidos e inflamación. Nivel de evidencia: PRÁCTICA — es un umbral
+   de uso extendido en bioimpedancia, no hay ensayo que lo fije. */
+function distribucionLiquidos(){
+  const rs = DATA.filter(d => d.ecf && d.icf).map(ratioECF);
+  if(!rs.length) return null;
+  const act = rs[rs.length-1];
+  return {actual:act, min:+Math.min(...rs).toFixed(3), max:+Math.max(...rs).toFixed(3),
+          n:rs.length, normal:act < ECF_UMBRAL};
+}
+
+function signoKg(x){ return (x >= 0 ? '+' : '') + x; }
+
+/* Tarjeta que sustituye a la lectura semanal de músculo. */
+function tarjetaMasaMagra(){
+  const last = DATA[DATA.length-1];
+  if(!last) return '';
+  const v  = variacionMagra();
+  const c  = variacionMagraCorta();
+  const h  = coefHidratacion();
+  const dl = distribucionLiquidos();
+
+  const alerta = v && !v.estable;
+  const estilo = alerta ? ' style="border-left-color:#f59e0b;background:#fffbeb"' : '';
+
+  const cuerpo = v
+    ? `<div><strong style="display:inline;font-size:inherit;text-transform:none;letter-spacing:0">
+         ${signoKg(v.delta)} kg</strong> desde ${esc(v.ref.fecha)} —
+         ${v.dias} días · ${signoKg(v.ritmo)} kg/semana.
+         ${v.estable
+            ? 'Dentro de lo esperable acompañando la pérdida de grasa.'
+            : 'Por encima del ritmo esperable. Es la señal para revisar proteína y entrenamiento de fuerza, no para bajar más rápido.'}</div>`
+    : `<div>Sin lectura interpretable todavía: hacen falta ${VENTANA_MAGRA} días
+         entre mediciones para distinguir músculo de hidratación.</div>`;
+
+  const descarte = (c && c.excede)
+    ? `<div style="color:#78350f">La comparación con la medición anterior
+         (${c.dias} días) marcaría ${signoKg(c.ritmo)} kg/semana.
+         <strong style="display:inline;font-size:inherit;text-transform:none;letter-spacing:0">Eso no es músculo</strong>
+         — el músculo no cambia tan rápido en ningún sentido. Es agua.</div>`
+    : '';
+
+  const explica = h
+    ? `<div class="progress-caveat" style="margin-top:9px">
+         <strong>Por qué esta báscula no puede medirte el músculo.</strong>
+         Mide agua, no músculo: la masa magra la calcula dividiendo el agua entre
+         un coeficiente fijo. En tus ${h.n} mediciones ese coeficiente ha sido
+         siempre <strong>${h.media} %</strong> (${h.min}–${h.max}).
+         Si llegas menos hidratada, lo lee como músculo perdido. No es un fallo
+         del aparato: es cómo funciona el método.</div>`
+    : '';
+
+  const liquidos = dl
+    ? `<div class="progress-caveat" style="margin-top:7px">
+         <strong>Distribución de líquidos — ${dl.actual}.</strong>
+         ${dl.normal ? 'Normal' : 'Por encima de lo normal'}
+         (referencia: por debajo de ${ECF_UMBRAL}).
+         Estable en tus ${dl.n} mediciones (${dl.min}–${dl.max}).
+         Es el agua fuera de las células sobre el agua total; cuando sube,
+         suele indicar retención de líquidos. Contexto, no diagnóstico.</div>`
+    : '';
+
+  return `
+      <div class="prog-insight${alerta ? '' : ' bueno'}"${estilo}>
+        <strong>Masa libre de grasa — ${mlgDe(last)} kg</strong>
+        ${cuerpo}
+        ${descarte}
+      </div>
+      ${explica}
+      ${liquidos}`;
+}
+
 function renderProgress() {
   const first=DATA[0], last=DATA[DATA.length-1];
   if(!first || !last){ document.getElementById('progressWidget').innerHTML=''; return; }
@@ -98,6 +239,8 @@ function renderProgress() {
         ${recomp.length>1?`<button class="link-btn" onclick="switchCompTab('recomposicion',document.querySelector('#comp-tab-nav .tab-btn[data-tab=recomposicion]'))">Ver los ${recomp.length} periodos →</button>`:''}</div>
       </div>` : ''}
 
+      ${tarjetaMasaMagra()}
+
       <div class="progress-caveat">La fecha asume que el ritmo actual de pérdida de grasa se mantiene.
       ${pesoEnMeta!=null && OBJ.peso ? `Ojo: llegar a ${grasaMeta} kg de grasa conservando tu músculo
       te dejaría cerca de <strong>${pesoEnMeta} kg</strong>, no de ${OBJ.peso} kg — bajar de ahí
@@ -143,11 +286,20 @@ function initRecomposicion(){
     const dS=+(b.smm-a.smm).toFixed(1);
     const gano = dP >= -0.6 && (dG <= -0.3 || dS >= 0.2);
     const cal = dP < 0 ? Math.round(Math.min(100, Math.abs(dG)/Math.abs(dP)*100)) : null;
+    // Por debajo de VENTANA_MAGRA dias el delta de musculo no separa musculo
+    // de hidratacion: se muestra atenuado y con la explicacion al pasar encima,
+    // en vez de en verde o rojo como si fuera una lectura fiable.
+    const dias  = (DAYS[i]!=null && DAYS[i-1]!=null) ? DAYS[i]-DAYS[i-1] : null;
+    const corto = dias!=null && dias < VENTANA_MAGRA;
+    const clsS  = corto ? 'd-agua' : (dS>0?'d-good':dS<0?'d-bad':'');
+    const ttS   = corto
+      ? ` title="Intervalo de ${dias} días. Por debajo de ${VENTANA_MAGRA} no se puede distinguir músculo de hidratación."`
+      : '';
     filas += `<tr class="${gano?'recomp-win':''}">
       <td>${esc(a.fecha)} → ${esc(b.fecha)}</td>
       <td class="${dP<0?'d-good':dP>0?'d-bad':''}">${dP>=0?'+':''}${dP}</td>
       <td class="${dG<0?'d-good':dG>0?'d-bad':''}">${dG>=0?'+':''}${dG}</td>
-      <td class="${dS>0?'d-good':dS<0?'d-bad':''}">${dS>=0?'+':''}${dS}</td>
+      <td class="${clsS}"${ttS} style="${corto?'color:#9aa0a6':''}">${dS>=0?'+':''}${dS}${corto?' ~':''}</td>
       <td>${cal!=null?cal+'%':'—'}</td>
       <td>${gano?'<span class="recomp-badge">recomposición</span>':''}</td>
     </tr>`;
@@ -157,7 +309,10 @@ function initRecomposicion(){
     <div class="tbl-section">Cambio entre mediciones</div>
     <div class="recomp-leyenda">Marcados los periodos donde el peso se movió poco o subió,
       pero perdiste grasa o ganaste músculo — <strong>${n} de ${DATA.length-1}</strong> intervalos.
-      La columna <em>calidad</em> es qué proporción de lo bajado fue grasa.</div>
+      La columna <em>calidad</em> es qué proporción de lo bajado fue grasa.
+      Los cambios de músculo marcados con <strong>~</strong> vienen de intervalos
+      de menos de ${VENTANA_MAGRA} días: ahí la báscula no puede separar músculo
+      de hidratación, así que son orientativos y no cuentan como progreso.</div>
     <div class="table-scroll"><table>
       <thead><tr><th>Periodo</th><th>Δ Peso</th><th>Δ Grasa</th><th>Δ Músculo</th><th>Calidad</th><th></th></tr></thead>
       <tbody>${filas}</tbody>
