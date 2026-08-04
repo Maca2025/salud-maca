@@ -833,22 +833,43 @@ function posEnEscala(v, tope){
    alimentos que usa todo lo demas. No esta escrito a mano en ningun sitio: si
    sube un plan nuevo desde la app, el rango se mueve solo.
    Con los planes de marzo y abril salen 1103-1330 kcal al dia. */
+/* Un ingrediente de receta llega de DOS formas segun cuando se mire: como
+   texto crudo de la hoja ("Huevo entero 2 piezas 100 g") o ya convertido en
+   {nombre, g} por recalcularTodasLasRecetas. sumarReceta, en este mismo
+   archivo, asume la segunda. Aqui se aceptan las dos, que era justo lo que
+   dejaba el rango vacio. */
+function kcalDeIngrediente(ing){
+  if(ing && typeof ing === 'object'){
+    const g = ing.g || 0;
+    if(!g || !ing.nombre) return 0;
+    const it = itemDe(ing.nombre, g);
+    return it ? (it.kcal || 0) : 0;
+  }
+  if(typeof macrosIngrediente === 'function'){
+    const m = macrosIngrediente(ing);
+    if(m && m.kcal) return m.kcal;
+  }
+  /* Ultimo recurso: el mismo formato que usa parseDetalle, nombre + gramos. */
+  const s = String(ing || '').trim();
+  const m2 = s.match(/^(.*?)\s+([\d.]+)\s*(?:g|ml)?$/);
+  if(!m2) return 0;
+  const it = itemDe(m2[1].replace(/\s*(\d+[½⅓¼⅔.]*|[½⅓¼⅔])\s*\S*$/,'').trim(), parseFloat(m2[2]));
+  return it ? (it.kcal || 0) : 0;
+}
+
 function rangoPlanKcal(){
   if(typeof PLANES !== 'object' || !PLANES) return null;
-  if(typeof RECETAS !== 'object' || typeof macrosIngrediente !== 'function') return null;
+  if(typeof RECETAS !== 'object' || !RECETAS) return null;
   const dias = [];
   Object.keys(PLANES).forEach(nombre => {
     (PLANES[nombre] || []).forEach(fila => {
-      let kc = 0, hay = false;
+      let kc = 0;
       ['desayuno','comida','colacion','cena'].forEach(c => {
         const r = RECETAS[fila[c]];
         if(!r) return;
-        (r.ingredientes || []).forEach(txt => {
-          const m = macrosIngrediente(txt);
-          if(m && m.kcal){ kc += m.kcal; hay = true; }
-        });
+        (r.ingredientes || []).forEach(ing => { kc += kcalDeIngrediente(ing); });
       });
-      if(hay) dias.push(Math.round(kc));
+      if(kc > 0) dias.push(Math.round(kc));
     });
   });
   if(dias.length < 2) return null;
