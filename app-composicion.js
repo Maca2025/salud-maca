@@ -166,30 +166,149 @@ const plugMetas = {
   }
 };
 
+/* ════════════════════════════════════════════════════════════
+   LA VISTA PRINCIPAL DE COMPOSICION
+   ------------------------------------------------------------
+   La tabla ya no va debajo: sus cifras se dibujan DENTRO del lienzo, cada una
+   bajo su fecha. Tiene que ir en canvas y no en HTML porque es la unica forma
+   de que las columnas caigan exactamente sobre su punto aunque cambie el ancho
+   de la pantalla. El precio: esos numeros no se pueden seleccionar.
+
+   COLAPSO POR MES. Con 19 mediciones los numeros no caben en un movil, y cada
+   medicion nueva lo empeora. Por defecto se ensena una por mes —la ultima— y
+   un toque las despliega todas.
+
+   LA PRIMERA MEDICION NO SE PIERDE NUNCA al colapsar: es la linea base.
+
+   OJO CON LOS DELTAS: se recalculan entre las mediciones VISIBLES. En la vista
+   mensual el delta del 27-abr es contra el 30-mar, no contra el 21-abr. Es lo
+   correcto —si no, las cifras no sumarian— pero significa que los mismos
+   numeros cambian segun la vista.
+   ════════════════════════════════════════════════════════════ */
+const RECOMP_MODO_KEY = 'maca-recomp-modo';
+const RECOMP_EPOCH    = Date.UTC(2026, 2, 16);   // 16-mar-2026, dia 0 de la serie
+let _recompModo = 'mes';                          // 'mes' | 'todas'
+
+/* Clave de mes a partir de `dias`, no del texto: las etiquetas son "16-mar" y
+   no llevan año, asi que en enero se solaparian dos meses de años distintos. */
+function mesClaveDe(d){
+  if(d.dias == null) return String(d.fecha).split('-')[1] || '';
+  const t = new Date(RECOMP_EPOCH + d.dias * 864e5);
+  return t.getUTCFullYear() + '-' + t.getUTCMonth();
+}
+
+function indicesRecomp(modo){
+  const m = modo || _recompModo;
+  if(m === 'todas') return DATA.map((_, i) => i);
+  const out = [];
+  DATA.forEach((d, i) => {
+    const sig = DATA[i + 1];
+    if(!sig || mesClaveDe(sig) !== mesClaveDe(d)) out.push(i);
+  });
+  if(out[0] !== 0) out.unshift(0);
+  return out;
+}
+
+function setRecompModo(m){
+  _recompModo = m;
+  try { localStorage.setItem(RECOMP_MODO_KEY, m); } catch(e){}
+  initRecomposicion();
+}
+
+function renderRecompModo(){
+  const host = document.getElementById('recomp-modo');
+  if(!host) return;
+  const btn = (m, txt) => `<button class="blk-btn${_recompModo===m?' primary':''}"
+    style="padding:5px 13px;font-size:.76rem" onclick="setRecompModo('${m}')">${txt}</button>`;
+  host.innerHTML = btn('mes',  `Por mes · ${indicesRecomp('mes').length}`) +
+                   btn('todas', `Todas · ${DATA.length}`) +
+    `<span style="font-size:.7rem;color:#aaa;margin-left:auto">Las cifras van bajo su fecha</span>`;
+}
+
+/* La rejilla de cifras, bajo el area del grafico y alineada con cada punto. */
+function plugRejilla(idx){
+  const FILAS = [
+    {k:'Δ peso',  v:(a,b)=>+(b.peso - a.peso).toFixed(1),     bueno:-1},
+    {k:'Δ grasa', v:(a,b)=>+(b.grasa - a.grasa).toFixed(1),   bueno:-1},
+    {k:'Δ magra', v:(a,b)=>+(mlgDe(b) - mlgDe(a)).toFixed(1), bueno:+1},
+    {k:'calidad', v:(a,b)=>calidadPerdida(+(b.peso-a.peso).toFixed(1),
+                                          +(b.grasa-a.grasa).toFixed(1)), cal:true},
+  ];
+  const marcados = new Set(detectarRecomposicion().map(r => r.a));
+  return {
+    id:'rejilla',
+    afterDraw(chart){
+      const {ctx, chartArea:A, scales} = chart;
+      const alto = 17, y0 = A.bottom + 34;
+      ctx.save();
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      FILAS.forEach((fila, r) => {
+        const y = y0 + r * alto;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#9aa0a6';
+        ctx.fillText(fila.k, A.left - 6, y);
+        ctx.strokeStyle = '#f2f2ef';
+        ctx.beginPath(); ctx.moveTo(A.left, y + alto/2); ctx.lineTo(A.right, y + alto/2); ctx.stroke();
+        ctx.textAlign = 'center';
+        idx.forEach((di, c) => {
+          if(c === 0) return;      // la primera columna no tiene contra que comparar
+          const val = fila.v(DATA[idx[c-1]], DATA[di]);
+          const x = scales.x.getPixelForValue(c);
+          let color, txt;
+          if(fila.cal){
+            txt = val == null ? '—' : val + '%';
+            color = val == null ? '#9aa0a6' : val > 100 ? '#15803d' : val < 50 ? '#b91c1c' : '#3d3d3a';
+          } else {
+            txt = (val > 0 ? '+' : '') + val.toFixed(1);
+            const signo = val === 0 ? 0 : (val > 0 ? 1 : -1);
+            color = signo === 0 ? '#9aa0a6' : (signo === fila.bueno ? '#15803d' : '#b91c1c');
+          }
+          ctx.fillStyle = color;
+          ctx.fillText(txt, x, y);
+        });
+      });
+      /* Las recomposiciones se marcan bajo la fecha donde CIERRA su ventana. */
+      const yR = y0 + FILAS.length * alto;
+      ctx.textAlign = 'right'; ctx.fillStyle = '#9aa0a6';
+      ctx.fillText('recomp.', A.left - 6, yR);
+      ctx.textAlign = 'center';
+      idx.forEach((di, c) => {
+        if(!marcados.has(DATA[di].fecha)) return;
+        ctx.fillStyle = '#15803d';
+        ctx.fillText('●', scales.x.getPixelForValue(c), yR);
+      });
+      ctx.restore();
+    }
+  };
+}
+
 function initRecomposicion(){
   if(!DATA.length) return;
-  const labels = DATA.map(d=>d.fecha);
+  try {
+    const m = localStorage.getItem(RECOMP_MODO_KEY);
+    if(m === 'mes' || m === 'todas') _recompModo = m;
+  } catch(e){}
 
-  /* UN SOLO EJE, y en kilos, porque las tres series SON kilos. Con tres
-     escalas distintas era el eje —no el dato— quien decidia cuanto se
-     parecian las lineas.
-     Y va la MASA MAGRA, no el SMM: en las 19 mediciones smm/masa magra va de
-     0.546 a 0.554, o sea que el SMM es la masa magra multiplicada por 0.55 y
-     no aporta ni un dato nuevo. La masa magra ademas es la metrica en la que
-     esta escrito el objetivo, asi que su suelo se puede dibujar. */
+  const idx = indicesRecomp();
+  renderRecompModo();
+  const sub = idx.map(i => DATA[i]);
+
   if(chartReg.cRecomp) chartReg.cRecomp.destroy();
   chartReg.cRecomp = new Chart(document.getElementById('cRecomp'), {
     type:'line',
-    plugins:[plugMetas],
-    data:{labels, datasets:[
-      {label:'Peso (contexto)', data:DATA.map(d=>d.peso), borderColor:'#c9c9c3',
+    plugins:[plugMetas, plugRejilla(idx)],
+    data:{labels: sub.map(d=>d.fecha), datasets:[
+      {label:'Peso (contexto)', data:sub.map(d=>d.peso), borderColor:'#c9c9c3',
        fill:false, tension:.3, borderDash:[4,4], borderWidth:1.5, pointRadius:0},
-      {label:'Grasa kg', data:DATA.map(d=>d.grasa), borderColor:'#e74c3c',
+      {label:'Grasa kg', data:sub.map(d=>d.grasa), borderColor:'#e74c3c',
        fill:false, tension:.3, borderWidth:2, pointRadius:2.5},
-      {label:'Masa magra kg', data:DATA.map(d=>mlgDe(d)), borderColor:'#2980b9',
+      {label:'Masa magra kg', data:sub.map(d=>mlgDe(d)), borderColor:'#2980b9',
        fill:false, tension:.3, borderWidth:2.5, pointRadius:2.5},
     ]},
     options:{responsive:true, maintainAspectRatio:false,
+      /* Hueco abajo para la rejilla y a la izquierda para sus etiquetas. */
+      layout:{padding:{bottom:104, left:46}},
       interaction:{mode:'index', intersect:false},
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
         metas:{lineas:[
@@ -202,10 +321,9 @@ function initRecomposicion(){
         ]},
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} kg`}}},
       scales:{
-        x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}},
-        /* Las rayas de meta las pinta un plugin, no son series, asi que NO
-           arrastran la escala: sin esto el eje se quedaba en 40 y la meta de
-           grasa (20.1) caia fuera del area y no se dibujaba. */
+        /* offset:false pega los puntos a los bordes: menos aire entre columnas. */
+        x:{grid:{display:false}, offset:false,
+           ticks:{font:{size:9}, autoSkip:false, maxRotation:0}},
         y:{grid:{color:GRID},ticks:{font:{size:9}},beginAtZero:false,
            suggestedMin: Math.max(0, Math.floor(grasaMetaKg() - 5)),
            title:{display:true,text:'kg',font:{size:9}}},
@@ -213,60 +331,27 @@ function initRecomposicion(){
       elements:{point:{radius:3,hoverRadius:5}}}
   });
 
-  // Tabla intervalo por intervalo
+  /* Debajo ya no hay tabla: solo la explicacion de lo que se ve arriba. */
   const cont = document.getElementById('recomp-tabla');
-  let filas = '';
-  const recomp = new Set(detectarRecomposicion().map(r=>r.de+'|'+r.a));
-  for(let i=1;i<DATA.length;i++){
-    const a=DATA[i-1], b=DATA[i];
-    const dP=+(b.peso-a.peso).toFixed(1);
-    const dG=+(b.grasa-a.grasa).toFixed(1);
-    const dS=+(b.smm-a.smm).toFixed(1);
-    /* La marca ya NO se decide aqui: sale de detectarRecomposicion, que exige
-       la ventana de 28 dias. Un intervalo suelto de 6 dias no puede ganarsela.
-       Se ilumina la fila cuyo tramo largo TERMINA en esta medicion. */
-    const gano = [...recomp].some(k => k.split('|')[1] === b.fecha);
-    const cal = calidadPerdida(dP, dG);
-    // Por debajo de VENTANA_MAGRA dias el delta de musculo no separa musculo
-    // de hidratacion: se muestra atenuado y con la explicacion al pasar encima,
-    // en vez de en verde o rojo como si fuera una lectura fiable.
-    const dias  = (DAYS[i]!=null && DAYS[i-1]!=null) ? DAYS[i]-DAYS[i-1] : null;
-    const corto = dias!=null && dias < VENTANA_MAGRA;
-    const clsS  = corto ? 'd-agua' : (dS>0?'d-good':dS<0?'d-bad':'');
-    const ttS   = corto
-      ? ` title="Intervalo de ${dias} días. Por debajo de ${VENTANA_MAGRA} no se puede distinguir músculo de hidratación."`
-      : '';
-    filas += `<tr class="${gano?'recomp-win':''}">
-      <td>${esc(a.fecha)} → ${esc(b.fecha)}</td>
-      <td class="${dP<0?'d-good':dP>0?'d-bad':''}">${dP>=0?'+':''}${dP}</td>
-      <td class="${dG<0?'d-good':dG>0?'d-bad':''}">${dG>=0?'+':''}${dG}</td>
-      <td class="${clsS}"${ttS} style="${corto?'color:#9aa0a6':''}">${dS>=0?'+':''}${dS}${corto?' ~':''}</td>
-      <td class="${cal==null?'':cal>100?'d-good':cal<50?'d-bad':''}">${
-        cal!=null?cal+'%':'—'}</td>
-      <td>${gano?'<span class="recomp-badge">recomposición</span>':''}</td>
-    </tr>`;
-  }
-  const n = detectarRecomposicion().length;
-  cont.innerHTML = `
-    <div class="tbl-section">Cambio entre mediciones</div>
+  if(cont) cont.innerHTML = `
     <div class="recomp-leyenda">
-      La columna <em>calidad</em> es qué proporción de lo que bajaste fue grasa.
+      La fila <em>calidad</em> es qué proporción de lo que bajaste fue grasa.
       <strong>Por encima de 100 % significa que además ganaste masa magra</strong>:
       perdiste más grasa que peso total. Si la grasa sube, la calidad es 0.
       <br><br>
-      <strong>Recomposición</strong> marca los tramos de <strong>${VENTANA_MAGRA} días
-      o más</strong> en los que la grasa bajó más de ${RUIDO_GRASA} kg y la calidad
-      pasó de 100 % — <strong>${n}</strong> hasta ahora. Los ${VENTANA_MAGRA} días no
-      son un capricho: por debajo, el cambio de músculo que mide la báscula es
-      sobre todo hidratación, y por eso va atenuado con <strong>~</strong>.
-      El umbral de ${RUIDO_GRASA} kg es el ruido medido en tus propias
-      mediciones.</div>
-    <div class="table-scroll"><table>
-      <thead><tr><th>Periodo</th><th>Δ Peso</th><th>Δ Grasa</th><th>Δ Músculo</th><th>Calidad</th><th></th></tr></thead>
-      <tbody>${filas}</tbody>
-    </table></div>`;
+      El punto de <strong>recomp.</strong> marca las mediciones que cierran un tramo
+      de <strong>${VENTANA_MAGRA} días o más</strong> con la grasa bajando más de
+      ${RUIDO_GRASA} kg y la calidad por encima de 100 % — <strong>${
+        detectarRecomposicion().length}</strong> hasta ahora. Los ${VENTANA_MAGRA} días
+      no son un capricho: por debajo, el cambio de músculo que mide la báscula es sobre
+      todo hidratación. El umbral de ${RUIDO_GRASA} kg es el ruido medido en tus propias
+      mediciones.
+      <br><br>
+      <strong>Las cifras se recalculan según la vista.</strong> Con el detalle mensual
+      cada columna se compara con la del mes anterior; con todas, con la medición
+      inmediatamente previa.
+    </div>`;
 }
-
 
 
 /* ═══════════════════════════════════════════════════════════════
@@ -493,6 +578,15 @@ function objetivoMolecular(){
 }
 
 function initComposicion() {
+  /* Al intercambiar el orden de las pestañas, la que se ve al entrar en la
+     sección es "Grasa vs Músculo". gotoSection solo dispara initComposicion,
+     así que esta se encarga de pintar la visible primero. Las barras apiladas
+     se dibujan en un panel oculto y Chart.js las redimensiona sola al
+     mostrarse. */
+  if(typeof lazyInited === 'object' && !lazyInited.recomposicion){
+    initRecomposicion();
+    lazyInited.recomposicion = true;
+  }
   renderProgress();
   const n=DATA.length;
   const MET=objetivoMolecular();

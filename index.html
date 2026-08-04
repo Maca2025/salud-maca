@@ -15,7 +15,7 @@
   <link rel="icon" href="icon-app.png"/>
   <title>Maca · Salud</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="estilos.css?v=20260803y"/>
+  <link rel="stylesheet" href="estilos.css?v=20260803z"/>
 </head>
 <body>
 
@@ -160,8 +160,8 @@
 
   <!-- Navegación de pestañas -->
   <div class="tab-nav" id="comp-tab-nav">
-    <button class="tab-btn active" data-tab="composicion" onclick="switchCompTab('composicion',this)">Composición</button>
-    <button class="tab-btn" data-tab="recomposicion" onclick="switchCompTab('recomposicion',this)">Grasa vs Músculo</button>
+    <button class="tab-btn active" data-tab="recomposicion" onclick="switchCompTab('recomposicion',this)">Grasa vs Músculo</button>
+    <button class="tab-btn" data-tab="composicion" onclick="switchCompTab('composicion',this)">Composición</button>
     <button class="tab-btn" data-tab="resumen" onclick="switchCompTab('resumen',this)">Resumen</button>
     <button class="tab-btn" data-tab="medidas" onclick="switchCompTab('medidas',this)">Medidas</button>
     <button class="tab-btn" onclick="switchCompTab('tabla',this)">Tabla completa</button>
@@ -187,7 +187,7 @@
   </div>
 
   <!-- Pestaña: Composición (stacked bar + progreso) -->
-  <div class="tab-panel active" id="comp-composicion">
+  <div class="tab-panel" id="comp-composicion">
     <div class="panel-body">
       <!-- Widget de progreso — llenado por renderProgress() -->
       <div id="progressWidget"></div>
@@ -220,15 +220,16 @@
     </div>
   </div>
 
-  <!-- Pestaña: Tabla completa -->
-  <div class="tab-panel" id="comp-recomposicion">
+  <!-- Pestaña: Grasa vs Músculo (primera vista de composición) -->
+  <div class="tab-panel active" id="comp-recomposicion">
     <div class="panel-body">
       <div class="chart-card" style="margin-bottom:18px">
-        <h3>Grasa y músculo en el tiempo — lo que importa</h3>
-        <div class="chart-wrap" style="height:260px"><canvas id="cRecomp"></canvas></div>
+        <h3>Grasa y masa magra en el tiempo — lo que importa</h3>
+        <div id="recomp-modo" style="display:flex;gap:7px;align-items:center;margin-bottom:10px"></div>
+        <div class="chart-wrap" style="height:520px"><canvas id="cRecomp"></canvas></div>
         <div style="margin-top:8px;font-size:.72rem;color:#888;line-height:1.5">
           Todo en kilos y en un solo eje. El peso va en gris de fondo: es contexto,
-          no objetivo. Lo que buscas es que la roja baje y la azul se mantenga o suba,
+          no objetivo. Lo que buscas es que la roja baje y la azul se mantenga o suba.
           Las rayas punteadas son el mismo objetivo visto por sus tres lados: la roja,
           los kg de grasa que te tocarían al 30 %; la azul, los kg de masa magra que no
           debes bajar; y la gris, el peso que sale de sumar las otras dos.
@@ -638,21 +639,21 @@
      HTML MODULE: FOOTER
 ══════════════════════════════════════════════════════════ -->
 <footer id="pie">Datos cargados desde Google Sheets</footer>
-<script src="app-datos.js?v=20260803y"></script>
-<script src="app-base.js?v=20260803y"></script>
-<script src="app-composicion.js?v=20260803y"></script>
-<script src="app-laboratorio.js?v=20260803y"></script>
-<script src="app-planes.js?v=20260803y"></script>
-<script src="app-suplementos.js?v=20260803y"></script>
-<script src="app-ingesta.js?v=20260803y"></script>
-<script src="app-alimentos.js?v=20260803y"></script>
-<script src="app-tracker.js?v=20260803y"></script>
-<script src="app-editar.js?v=20260803y"></script>
-<script src="app-registro.js?v=20260803y"></script>
-<script src="app-fotos.js?v=20260803y"></script>
-<script src="app-nav.js?v=20260803y"></script>
-<script src="app-macros.js?v=20260803y"></script>
-<script src="app-formularios.js?v=20260803y"></script>
-<script src="app-ia.js?v=20260803y"></script>
+<script src="app-datos.js?v=20260803z"></script>
+<script src="app-base.js?v=20260803z"></script>
+<script src="app-composicion.js?v=20260803z"></script>
+<script src="app-laboratorio.js?v=20260803z"></script>
+<script src="app-planes.js?v=20260803z"></script>
+<script src="app-suplementos.js?v=20260803z"></script>
+<script src="app-ingesta.js?v=20260803z"></script>
+<script src="app-alimentos.js?v=20260803z"></script>
+<script src="app-tracker.js?v=20260803z"></script>
+<script src="app-editar.js?v=20260803z"></script>
+<script src="app-registro.js?v=20260803z"></script>
+<script src="app-fotos.js?v=20260803z"></script>
+<script src="app-nav.js?v=20260803z"></script>
+<script src="app-macros.js?v=20260803z"></script>
+<script src="app-formularios.js?v=20260803z"></script>
+<script src="app-ia.js?v=20260803z"></script>
 </body>
 </html>
