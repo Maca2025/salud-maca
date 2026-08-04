@@ -250,7 +250,7 @@ function renderIngestaHoy(){
         <div class="agua-box">
           <div class="agua-lbl">💧 Agua <strong>${(aguaMl/1000).toFixed(2)} L</strong></div>
           <div class="agua-vasos">
-            ${Array.from({length:10},(_,k)=>`
+            ${Array.from({length:(typeof VASOS_MAX==='number'?VASOS_MAX:12)},(_,k)=>`
               <button class="vaso ${k<vasos?'lleno':''}" onclick="setAgua(${(k+1)*250})"
                 aria-label="${k+1} vasos"></button>`).join('')}
           </div>

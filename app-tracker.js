@@ -686,7 +686,10 @@ function renderInteracciones() {
    del dia; para corregir se va al tracker.
    ═══════════════════════════════════════════════════════════════ */
 const VASO_ML   = 250;
-const VASOS_DIA = 8;
+const VASOS_DIA = 8;    // la META: 8 x 250 ml = 2 L
+/* Vasos que se PINTAN. Mas que la meta a proposito: beber por encima de 2 L es
+   normal y hasta ahora no habia donde apuntarlo. La meta NO se mueve. */
+const VASOS_MAX = 12;   // 3 L
 const PROT_MIN  = 1.2;   // g por kg de peso
 const PROT_MAX  = 1.6;
 
@@ -892,7 +895,7 @@ function renderHoy(){
   const vasos = Math.round(aguaHoyMl()/VASO_ML);
   const vasosHTML = `
     <div class="hoy-vasos" id="hoy-agua" style="margin-top:10px">${
-      Array.from({length:VASOS_DIA}, (_,i) => i+1).map(n =>
+      Array.from({length:VASOS_MAX}, (_,i) => i+1).map(n =>
         `<button class="vaso${n <= vasos ? ' lleno' : ''}" onclick="tocarVaso(${n})"
            aria-label="Vaso ${n}"></button>`).join('')}</div>`;
   const agua = (typeof tarjetaAgua === 'function')
@@ -1084,48 +1087,188 @@ async function hacerSuelo(){
 }
 
 /* ── La tarjeta de Hoy ───────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   MOVIMIENTO CON CRONOMETRO
+   ------------------------------------------------------------
+   Los tres botones SELECCIONAN la actividad; no la registran. Es la unica
+   forma coherente de juntar "botones de actividad" con "marcar inicio y fin":
+   si registraran al tocarlos, el cronometro no sabria de que actividad hablar.
+
+   EL INICIO SE GUARDA EN localStorage, NO EN MEMORIA. En iOS la app se cierra
+   en segundo plano constantemente, y un cronometro que se pierde al cambiar de
+   app no sirve para una sesion de doce minutos. Al volver, sigue contando.
+
+   Y queda "sin cronometro" para los dias en que te acuerdas despues: olvidarte
+   de darle a empezar no puede significar no poder registrar nada.
+   ════════════════════════════════════════════════════════════ */
+const MOV_KEY = 'maca-mov-crono';
+const MOV_ACT = {
+  fuerza:    {tipo:'fuerza', icono:'💪', min:12},
+  caminata:  {tipo:'cardio', icono:'🚶', nombre:'Caminata', min:20},
+  rebounder: {tipo:'suelo',  icono:'🔽', nombre:'Rebounder', min:5},
+};
+let _movAct = 'fuerza';
+let _movSes = null;      // null = la que toque por rotacion
+let _movTick = null;
+
+/* En linea: estilos.css tiene .mov-op y .mov-ops, pero no el seleccionado, el
+   cronometro ni el boton de cambiar sesion. Asi el despliegue no arrastra la
+   hoja de estilos. */
+const MOV_CSS = {
+  sel:   'border:1.5px solid #1b6b4f;background:#f2f8f5',
+  crono: 'display:flex;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px solid #f0f0ed',
+  reloj: 'font-size:1.35rem;font-weight:800;color:#1b4332;font-variant-numeric:tabular-nums;min-width:74px',
+  swap:  'margin-left:auto;width:28px;height:28px;border-radius:7px;border:1px solid #e0e0dd;background:#fff;color:#666;font-size:.95rem;line-height:26px;text-align:center;flex:none',
+  pie:   'font-size:.7rem;color:#999;line-height:1.5;margin-top:8px',
+};
+
+function movSesion(){
+  const s = _movSes ? SESIONES.find(x => x.id === _movSes) : null;
+  return s || proximaSesion();
+}
+function movNombre(){
+  return _movAct === 'fuerza'
+    ? `Sesión ${movSesion().id} · ${movSesion().nombre}`
+    : MOV_ACT[_movAct].nombre;
+}
+function movCrono(){
+  try {
+    const c = JSON.parse(localStorage.getItem(MOV_KEY) || 'null');
+    return (c && c.t0 && c.fecha === hoyISO()) ? c : null;
+  } catch(e){ return null; }
+}
+function movReloj(seg){
+  return String(Math.floor(seg/60)).padStart(2,'0') + ':' + String(seg%60).padStart(2,'0');
+}
+
+function movElegir(a){
+  if(movCrono()) return;          // en marcha no se cambia de actividad
+  _movAct = a;
+  renderHoy();
+}
+function movVerSesiones(ev){
+  if(ev) ev.stopPropagation();
+  if(movCrono()) return;
+  const host = document.getElementById('mov-pick');
+  if(host) host.style.display = host.style.display === 'none' ? 'block' : 'none';
+}
+function movSetSesion(id){
+  _movSes = id; _movAct = 'fuerza';
+  renderHoy();
+}
+
+function movEmpezar(){
+  try {
+    localStorage.setItem(MOV_KEY, JSON.stringify({
+      t0: Date.now(), act: _movAct, ses: movSesion().id, fecha: hoyISO()}));
+  } catch(e){ alert('El navegador bloqueó el almacenamiento local.'); return; }
+  renderHoy();
+  /* Las instrucciones salen AL EMPEZAR: es cuando hacen falta. */
+  if(_movAct === 'fuerza') abrirSesionFuerza(movSesion().id);
+}
+
+async function movTerminar(){
+  const c = movCrono();
+  if(!c) return;
+  const min = Math.max(1, Math.round((Date.now() - c.t0) / 60000));
+  const a = MOV_ACT[c.act] || MOV_ACT.rebounder;
+  const nombre = c.act === 'fuerza'
+    ? `Sesión ${c.ses} · ${(SESIONES.find(s=>s.id===c.ses)||{}).nombre || ''}`.trim()
+    : a.nombre;
+  try {
+    await guardarSesionEjercicio(a.tipo, nombre, min, ultimaAncla());
+    try { localStorage.removeItem(MOV_KEY); } catch(e){}
+    renderHoy();
+  } catch(e){
+    alert('No se pudo guardar: ' + e.message + '\n\nEl cronómetro sigue corriendo.');
+  }
+}
+
+function movDescartar(){
+  if(!confirm('¿Descartar esta sesión sin registrarla?')) return;
+  try { localStorage.removeItem(MOV_KEY); } catch(e){}
+  renderHoy();
+}
+
+/* Refresca solo el reloj, sin repintar la tarjeta entera cada segundo. */
+function movLatido(){
+  clearInterval(_movTick);
+  const c = movCrono();
+  if(!c) return;
+  _movTick = setInterval(() => {
+    const el = document.getElementById('mov-reloj');
+    if(!el){ clearInterval(_movTick); return; }
+    el.textContent = movReloj(Math.floor((Date.now() - c.t0) / 1000));
+  }, 1000);
+}
+
 function tarjetaMovimiento(){
   const h = habito();
   const hoy = hechoHoy();
-  const s = proximaSesion();
+  const c = movCrono();
+  const s = movSesion();
 
-  if(hoy.length){
-    const lista = hoy.map(e =>
-      `<div class="mov-hecho">✓ ${esc(e.actividad || e.tipo)}${
-        e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
-    return `
-      <div class="hoy-card">
-        <div class="hoy-hdr"><span>🏃 Movimiento</span>
-          <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días</span></div>
-        ${lista}
-        <button class="blk-btn" style="width:100%;margin-top:9px"
-          onclick="abrirSesionFuerza()">Añadir otra</button>
-      </div>`;
-  }
+  const hecho = hoy.map(e =>
+    `<div class="mov-hecho">✓ ${esc(e.actividad || e.tipo)}${
+      e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
+
+  const opcion = (k, titulo, sub, extra) => `
+    <button class="mov-op" onclick="movElegir('${k}')"
+      style="${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
+      <span class="mov-ico">${MOV_ACT[k].icono}</span>
+      <span><strong>${titulo}</strong><em>${sub}</em></span>
+      ${extra || ''}
+    </button>`;
+
+  const otras = SESIONES.map(x =>
+    `<button class="blk-btn" style="width:100%;margin-bottom:5px;text-align:left"
+       onclick="movSetSesion('${x.id}')">Sesión ${x.id} · ${esc(x.nombre)}</button>`).join('');
+
+  const crono = c
+    ? `<div style="${MOV_CSS.crono}">
+         <span style="${MOV_CSS.reloj}" id="mov-reloj">${movReloj(Math.floor((Date.now()-c.t0)/1000))}</span>
+         <button class="blk-btn danger" style="flex:1" onclick="movTerminar()">Terminar</button>
+         <button class="blk-btn ghost" onclick="movDescartar()" title="Descartar">✕</button>
+       </div>
+       <div style="${MOV_CSS.pie}">${esc(movNombre())} en marcha. Puedes salir: sigue contando.</div>`
+    : `<div style="${MOV_CSS.crono}">
+         <span style="${MOV_CSS.reloj}" id="mov-reloj">00:00</span>
+         <button class="blk-btn primary" style="flex:1" onclick="movEmpezar()">Empezar</button>
+         <button class="blk-btn ghost" onclick="movSinCrono()">Sin cronómetro</button>
+       </div>
+       <div style="${MOV_CSS.pie}">Elige la actividad y dale a empezar.
+         Al terminar se guarda con los minutos reales.</div>`;
+
+  setTimeout(movLatido, 0);
 
   return `
     <div class="hoy-card">
       <div class="hoy-hdr"><span>🏃 Movimiento</span>
         <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días${
           h.fuerza ? ` · ${h.fuerza} de fuerza` : ''}</span></div>
+      ${hecho}
       <div class="mov-ops">
-        <button class="mov-op" onclick="abrirSesionFuerza()">
-          <span class="mov-ico">💪</span>
-          <span><strong>Fuerza · 12 min</strong>
-            <em>Sesión ${s.id} — ${esc(s.nombre)} · protege tu masa magra</em></span>
-        </button>
-        <button class="mov-op" onclick="abrirCardio()">
-          <span class="mov-ico">🚴</span>
-          <span><strong>Cardio · 20 min</strong>
-            <em>aguante para el paddle</em></span>
-        </button>
-        <button class="mov-op suelo" id="btn-suelo" onclick="hacerSuelo()">
-          <span class="mov-ico">🔽</span>
-          <span><strong>Suelo · 5 min</strong>
-            <em>rebounder · cuenta como día activo</em></span>
-        </button>
+        ${opcion('fuerza', `Sesión ${s.id} · ${esc(s.nombre)}`,
+                 `${MOV_ACT.fuerza.min} min · protege tu masa magra`,
+                 `<span style="${MOV_CSS.swap}" onclick="movVerSesiones(event)"
+                    role="button" aria-label="Cambiar de sesión" title="Cambiar de sesión">↻</span>`)}
+        <div id="mov-pick" style="display:none;padding:8px 0">${otras}</div>
+        ${opcion('caminata', 'Caminata', 'aguante para el paddle')}
+        ${opcion('rebounder', 'Rebounder', '5 min ya cuentan como día activo')}
       </div>
+      ${crono}
     </div>`;
+}
+
+/* Para cuando se te olvidó darle a empezar: los minutos a mano. */
+async function movSinCrono(){
+  const txt = prompt(`¿Cuántos minutos de ${movNombre()}?`, String(MOV_ACT[_movAct].min));
+  if(txt === null) return;
+  const min = Math.round(parseFloat(String(txt).replace(',', '.')));
+  if(!min || min <= 0 || min > 600){ alert('Pon un número de minutos entre 1 y 600.'); return; }
+  const a = MOV_ACT[_movAct];
+  try { await guardarSesionEjercicio(a.tipo, movNombre(), min, ultimaAncla()); }
+  catch(e){ alert('No se pudo guardar: ' + e.message); }
 }
 
 /* ── La sesión de fuerza, con las instrucciones en pantalla ──── */
