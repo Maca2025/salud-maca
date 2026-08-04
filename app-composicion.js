@@ -209,20 +209,28 @@ function indicesRecomp(modo){
   return out;
 }
 
+/* Un solo estado para las DOS graficas de la seccion: si eliges "por mes",
+   las barras apiladas y la de grasa vs masa magra cambian juntas. Dos
+   interruptores para lo mismo, cada uno donde hace falta. */
 function setRecompModo(m){
   _recompModo = m;
   try { localStorage.setItem(RECOMP_MODO_KEY, m); } catch(e){}
   initRecomposicion();
+  if(typeof lazyInited === 'object' && lazyInited.composicion) initComposicion();
 }
 
 function renderRecompModo(){
-  const host = document.getElementById('recomp-modo');
-  if(!host) return;
   const btn = (m, txt) => `<button class="blk-btn${_recompModo===m?' primary':''}"
     style="padding:5px 13px;font-size:.76rem" onclick="setRecompModo('${m}')">${txt}</button>`;
-  host.innerHTML = btn('mes',  `Por mes · ${indicesRecomp('mes').length}`) +
-                   btn('todas', `Todas · ${DATA.length}`) +
-    `<span style="font-size:.7rem;color:#aaa;margin-left:auto">Las cifras van bajo su fecha</span>`;
+  const botones = btn('mes',  `Por mes · ${indicesRecomp('mes').length}`) +
+                  btn('todas', `Todas · ${DATA.length}`);
+  const pon = (id, nota) => {
+    const host = document.getElementById(id);
+    if(host) host.innerHTML = botones +
+      `<span style="font-size:.7rem;color:#aaa;margin-left:auto">${nota}</span>`;
+  };
+  pon('recomp-modo', 'Las cifras van bajo su fecha');
+  pon('comp-modo',   'La última medición de cada mes');
 }
 
 /* La rejilla de cifras, bajo el area del grafico y alineada con cada punto. */
@@ -603,10 +611,15 @@ function initComposicion() {
     lazyInited.recomposicion = true;
   }
   renderProgress();
-  const n=DATA.length;
+  renderRecompModo();
+  /* Mismo colapso por mes que la grafica de grasa vs masa magra, y con el mismo
+     interruptor: D es el subconjunto visible, no DATA entera. La columna de
+     objetivo se añade aparte y no depende de esto. */
+  const D = indicesRecomp().map(i => D[i]);
+  const n=D.length;
   const MET=objetivoMolecular();
-  const sl=[...DATA.map(d=>d.fecha),'🎯 Objetivo'];
-  const ga=[...DATA.map(d=>+(d.peso-d.ecf-d.icf-d.prot-d.min).toFixed(1)),grasaMetaKg()];
+  const sl=[...D.map(d=>d.fecha),'🎯 Objetivo'];
+  const ga=[...D.map(d=>+(d.peso-d.ecf-d.icf-d.prot-d.min).toFixed(1)),grasaMetaKg()];
   function bgs(s,l){return[...Array(n).fill(s),l];}
   const dp={id:'dp',afterDraw(chart){
     const ctx=chart.ctx, tc=['#fff','#fff','#fff','#333','#fff'];
@@ -627,16 +640,16 @@ function initComposicion() {
         ctx.save(); ctx.font='bold 9.5px system-ui'; ctx.fillStyle='#2d6a4f';
         ctx.textAlign='center'; ctx.textBaseline='top';
         ctx.fillText((sueloMlg()+grasaMetaKg()).toFixed(1)+' kg',bar.x,ty+3); ctx.restore();
-        const dv=+((sueloMlg()+grasaMetaKg())-DATA[n-1].peso).toFixed(1);
+        const dv=+((sueloMlg()+grasaMetaKg())-D[n-1].peso).toFixed(1);
         ctx.save(); ctx.font='bold 8.5px system-ui'; ctx.fillStyle='#15803d';
         ctx.textAlign='center'; ctx.textBaseline='bottom';
         ctx.fillText(dv.toFixed(1),bar.x,bar.y-2); ctx.restore(); return;
       }
       ctx.save(); ctx.font='bold 9.5px system-ui'; ctx.fillStyle='#064e3b';
       ctx.textAlign='center'; ctx.textBaseline='top';
-      ctx.fillText(DATA[i].peso.toFixed(1)+' kg',bar.x,ty+3); ctx.restore();
+      ctx.fillText(D[i].peso.toFixed(1)+' kg',bar.x,ty+3); ctx.restore();
       if(i===0) return;
-      const dP=+(DATA[i].peso-DATA[i-1].peso).toFixed(1);
+      const dP=+(D[i].peso-D[i-1].peso).toFixed(1);
       ctx.save(); ctx.font='bold 8.5px system-ui';
       ctx.fillStyle=dP<0?'#15803d':'#dc2626';
       ctx.textAlign='center'; ctx.textBaseline='bottom';
@@ -646,10 +659,10 @@ function initComposicion() {
   if(chartReg.cStack) chartReg.cStack.destroy();
   chartReg.cStack=new Chart(document.getElementById('cStack'),{type:'bar',
     data:{labels:sl, datasets:[
-      {label:'ECF',      data:[...DATA.map(d=>d.ecf),  MET.ecf],  backgroundColor:bgs('#5b9bd5','#5b9bd566'),  borderColor:bgs('rgba(0,0,0,0)','#1d4ed8'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'ICF',      data:[...DATA.map(d=>d.icf),  MET.icf],  backgroundColor:bgs('#2471a3','#2471a366'),  borderColor:bgs('rgba(0,0,0,0)','#1e3a8a'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'Proteínas',data:[...DATA.map(d=>d.prot), MET.prot], backgroundColor:bgs('#52b788','#52b78866'),  borderColor:bgs('rgba(0,0,0,0)','#14532d'), borderWidth:bgs(0,2), stack:'s'},
-      {label:'Minerales',data:[...DATA.map(d=>d.min),  MET.min],  backgroundColor:bgs('#f0b429','#f0b42966'),  borderColor:bgs('rgba(0,0,0,0)','#78350f'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'ECF',      data:[...D.map(d=>d.ecf),  MET.ecf],  backgroundColor:bgs('#5b9bd5','#5b9bd566'),  borderColor:bgs('rgba(0,0,0,0)','#1d4ed8'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'ICF',      data:[...D.map(d=>d.icf),  MET.icf],  backgroundColor:bgs('#2471a3','#2471a366'),  borderColor:bgs('rgba(0,0,0,0)','#1e3a8a'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'Proteínas',data:[...D.map(d=>d.prot), MET.prot], backgroundColor:bgs('#52b788','#52b78866'),  borderColor:bgs('rgba(0,0,0,0)','#14532d'), borderWidth:bgs(0,2), stack:'s'},
+      {label:'Minerales',data:[...D.map(d=>d.min),  MET.min],  backgroundColor:bgs('#f0b429','#f0b42966'),  borderColor:bgs('rgba(0,0,0,0)','#78350f'), borderWidth:bgs(0,2), stack:'s'},
       {label:'Grasa',    data:ga,                                   backgroundColor:bgs('#e74c3c','#e74c3c66'),  borderColor:bgs('rgba(0,0,0,0)','#9f1239'), borderWidth:bgs(0,2), stack:'s'},
     ]},
     options:{responsive:true, maintainAspectRatio:false,
