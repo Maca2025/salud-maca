@@ -829,13 +829,55 @@ function posEnEscala(v, tope){
    ya esta en la hoja. `pie` y `extra` los pone quien la llama.
    Vive en app-ingesta.js, que carga ANTES que app-tracker.js: desde alli se
    llama en tiempo de ejecucion, con la guarda de typeof. */
+/* El rango de kcal que prescriben SUS planes, calculado de la misma tabla de
+   alimentos que usa todo lo demas. No esta escrito a mano en ningun sitio: si
+   sube un plan nuevo desde la app, el rango se mueve solo.
+   Con los planes de marzo y abril salen 1103-1330 kcal al dia. */
+function rangoPlanKcal(){
+  if(typeof PLANES !== 'object' || !PLANES) return null;
+  if(typeof RECETAS !== 'object' || typeof macrosIngrediente !== 'function') return null;
+  const dias = [];
+  Object.keys(PLANES).forEach(nombre => {
+    (PLANES[nombre] || []).forEach(fila => {
+      let kc = 0, hay = false;
+      ['desayuno','comida','colacion','cena'].forEach(c => {
+        const r = RECETAS[fila[c]];
+        if(!r) return;
+        (r.ingredientes || []).forEach(txt => {
+          const m = macrosIngrediente(txt);
+          if(m && m.kcal){ kc += m.kcal; hay = true; }
+        });
+      });
+      if(hay) dias.push(Math.round(kc));
+    });
+  });
+  if(dias.length < 2) return null;
+  return {min: Math.min(...dias), max: Math.max(...dias)};
+}
+
 /* Los mismos chips que habia sueltos debajo del registro, ahora dentro de la
-   tarjeta. Las clases lt-an / lt-ve / lt-kc ya existen en estilos.css. */
+   tarjeta. Las clases lt-an / lt-ve / lt-kc ya existen en estilos.css.
+
+   EL DE KCAL NO ES UN TOPE, ES UN RANGO. Y solo se colorea POR ARRIBA, nunca
+   por abajo: a media mañana siempre vas por debajo del plan porque todavia no
+   has comido, asi que pintarlo de rojo seria mentir. Pasarse, en cambio, es
+   pasarse a cualquier hora.
+   El riesgo medido de Maca es quedarse corta, no excederse: 68 g de proteina
+   de media contra un suelo de 118, y entre el 28 y el 39 % de lo perdido en
+   masa magra. Por eso esto informa y no persigue. */
 function chipsProteina(pa, pv, kcal){
+  const r = rangoPlanKcal();
+  let chipK = `<span class="lt-kc">${kcal} kcal</span>`;
+  if(r){
+    const alto = kcal > r.max;
+    chipK = `<span class="lt-kc"${alto ? ' style="background:#fef3c7;color:#b45309"' : ''}
+      title="Tu plan va de ${r.min} a ${r.max} kcal al día">${kcal} kcal<span
+      style="opacity:.6"> · plan ${r.min}–${r.max}</span></span>`;
+  }
   return `<div class="lt-sub" style="justify-content:flex-start;margin-top:0">
     <span class="lt-an">${pa} animal</span>
     <span class="lt-ve">${pv} vegetal</span>
-    <span class="lt-kc">${kcal} kcal</span>
+    ${chipK}
   </div>`;
 }
 
