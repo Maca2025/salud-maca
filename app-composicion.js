@@ -471,7 +471,19 @@ function posSuelo(mlg, suelo){
   return Math.max(1, Math.min(99, +p.toFixed(1)));
 }
 
+/* La tarjeta de tirzepatida se mudo aqui desde Hoy. La construye
+   tarjetaTirze() en app-tracker.js, que carga DESPUES que este archivo: por eso
+   la llamada va en tiempo de ejecucion y con la guarda de typeof.
+   No se toco nada de su logica — ciclo, rotacion de zona, ingestaPorCiclo y el
+   formulario siguen exactamente igual. */
+function renderTirze(){
+  const host = document.getElementById('tirze-host');
+  if(!host) return;
+  host.innerHTML = (typeof tarjetaTirze === 'function') ? tarjetaTirze() : '';
+}
+
 function renderComposicionKPIs() {
+  renderTirze();
   const last = DATA[DATA.length-1], first = DATA[0];
   if(!last || !first){ document.getElementById('kpis').innerHTML = ''; return; }
   const h  = coefHidratacion();

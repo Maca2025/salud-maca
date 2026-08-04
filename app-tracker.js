@@ -940,10 +940,13 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      <!-- Dos columnas: proteina y agua · batido y suplementos.
-           Movimiento y tirzepatida van a lo ancho. En movil la rejilla
-           colapsa a una sola columna (media query en estilos.css). -->
-      ${prot}${agua}${tarjetaBatido()}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
+      <!-- Dos columnas: proteina y agua · batido y suplementos. Movimiento
+           va a lo ancho. En movil la rejilla colapsa a una sola columna
+           (media query en estilos.css).
+           La inyeccion se mudo a Composicion Corporal, que es donde estan las
+           mediciones del FiT Mao: caen el mismo dia. Su ciclo, la rotacion de
+           zona y el analisis por dia del ciclo siguen intactos. -->
+      ${prot}${agua}${tarjetaBatido()}${bloque}${tarjetaMovimiento()}
     </div>`;
 }
 
@@ -1118,10 +1121,14 @@ let _movTick = null;
    cronometro ni el boton de cambiar sesion. Asi el despliegue no arrastra la
    hoja de estilos. */
 const MOV_CSS = {
-  sel:   'border:1.5px solid #1b6b4f;background:#f2f8f5',
+  /* Los tres en fila. El override va en linea y no en .mov-ops porque esa
+     clase la comparte el modal de cardio, que si los quiere apilados. */
+  ops:   'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px',
+  op:    'flex-direction:column;align-items:flex-start;gap:5px;position:relative;padding:10px 11px',
+  sel:   'border:1.5px solid #42525E;background:#eef1f3',
   crono: 'display:flex;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px solid #f0f0ed',
   reloj: 'font-size:1.35rem;font-weight:800;color:#1b4332;font-variant-numeric:tabular-nums;min-width:74px',
-  swap:  'margin-left:auto;width:28px;height:28px;border-radius:7px;border:1px solid #e0e0dd;background:#fff;color:#666;font-size:.95rem;line-height:26px;text-align:center;flex:none',
+  swap:  'position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:7px;border:1px solid #e0e0dd;background:#fff;color:#666;font-size:.95rem;line-height:26px;text-align:center;flex:none',
   pie:   'font-size:.7rem;color:#999;line-height:1.5;margin-top:8px',
 };
 
@@ -1217,7 +1224,7 @@ function tarjetaMovimiento(){
 
   const opcion = (k, titulo, sub, extra) => `
     <button class="mov-op" onclick="movElegir('${k}')"
-      style="${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
+      style="${MOV_CSS.op};${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
       <span class="mov-ico">${MOV_ACT[k].icono}</span>
       <span><strong>${titulo}</strong><em>${sub}</em></span>
       ${extra || ''}
@@ -1250,15 +1257,15 @@ function tarjetaMovimiento(){
         <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días${
           h.fuerza ? ` · ${h.fuerza} de fuerza` : ''}</span></div>
       ${hecho}
-      <div class="mov-ops">
-        ${opcion('fuerza', `Sesión ${s.id} · ${esc(s.nombre)}`,
-                 `${MOV_ACT.fuerza.min} min · protege tu masa magra`,
+      <div class="mov-ops" style="${MOV_CSS.ops}">
+        ${opcion('fuerza', `Sesión ${s.id}`,
+                 `${esc(s.nombre)} · ${MOV_ACT.fuerza.min} min`,
                  `<span style="${MOV_CSS.swap}" onclick="movVerSesiones(event)"
                     role="button" aria-label="Cambiar de sesión" title="Cambiar de sesión">↻</span>`)}
-        <div id="mov-pick" style="display:none;padding:8px 0">${otras}</div>
         ${opcion('caminata', 'Caminata', 'aguante para el paddle')}
-        ${opcion('rebounder', 'Rebounder', '5 min ya cuentan como día activo')}
+        ${opcion('rebounder', 'Rebounder', '5 min ya cuentan')}
       </div>
+      <div id="mov-pick" style="display:none;padding:8px 0">${otras}</div>
       ${crono}
     </div>`;
 }
@@ -1443,7 +1450,7 @@ function tarjetaTirze(){
 
   if(!u){
     return `
-      <div class="hoy-card hoy-ancho">
+      <div class="hoy-card">
         <div class="hoy-hdr"><span>💉 Tirzepatida</span></div>
         <div class="hoy-sub">Sin registrar todavía. Con la primera inyección la app
           empieza a contar el ciclo y a ordenar tu comida por día del ciclo.</div>
@@ -1468,7 +1475,7 @@ function tarjetaTirze(){
   }
 
   return `
-    <div class="hoy-card hoy-ancho">
+    <div class="hoy-card">
       <div class="hoy-hdr"><span>💉 Tirzepatida</span>
         <span class="hoy-sub">día ${ciclo} del ciclo</span></div>
       <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}la siguiente,
@@ -1539,7 +1546,8 @@ async function guardarInyeccionForm(){
     msg.className = 'form-msg ok';
     msg.textContent = `✓ ${r.actualizado ? 'Corregida' : 'Guardada'}. Día 1 del ciclo.`;
     btn.textContent = '✓ Guardada';
-    renderHoy();
+    /* La tarjeta ya no vive en Hoy sino en Composicion. */
+    if(typeof renderTirze === 'function') renderTirze();
     setTimeout(cerrarForm, 1000);
   } catch(e){
     msg.className = 'form-msg err'; msg.textContent = e.message;
