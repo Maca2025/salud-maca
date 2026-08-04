@@ -310,7 +310,10 @@ function initRecomposicion(){
       /* Hueco abajo para la rejilla y a la izquierda para sus etiquetas. */
       layout:{padding:{bottom:104, left:46}},
       interaction:{mode:'index', intersect:false},
-      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+      /* La leyenda va ARRIBA: abajo se le montaba encima a la rejilla de
+         cifras, que ocupa justo ese hueco. */
+      plugins:{legend:{position:'top',align:'start',
+                       labels:{boxWidth:10,font:{size:10},padding:12}},
         metas:{lineas:[
           {valor: grasaMetaKg(), color:'#e74c3c',
            texto:`objetivo grasa ${grasaMetaKg()} kg (${metaPbf()} %)`},
