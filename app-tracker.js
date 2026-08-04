@@ -1123,7 +1123,7 @@ let _movTick = null;
 const MOV_CSS = {
   /* Los tres en fila. El override va en linea y no en .mov-ops porque esa
      clase la comparte el modal de cardio, que si los quiere apilados. */
-  ops:   'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px',
+  ops:   'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:stretch',
   op:    'flex-direction:column;align-items:flex-start;gap:5px;position:relative;padding:10px 11px',
   sel:   'border:1.5px solid #42525E;background:#eef1f3',
   crono: 'display:flex;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px solid #f0f0ed',
@@ -1225,10 +1225,13 @@ function tarjetaMovimiento(){
     `<div class="mov-hecho" style="padding:0 0 4px;font-size:.76rem">✓ ${
       esc(e.actividad || e.tipo)}${e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
 
+  /* La celda es una columna y el boton se pega abajo con margin-top:auto. Asi
+     los tres botones quedan alineados aunque solo algunos lleven encima la
+     linea de lo ya hecho, que era lo que descuadraba la Sesion A. */
   const opcion = (k, titulo, sub, extra) => `
-    <div>${hechoDe(k)}
+    <div style="display:flex;flex-direction:column;height:100%">${hechoDe(k)}
     <button class="mov-op" onclick="movElegir('${k}')"
-      style="${MOV_CSS.op};width:100%;${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
+      style="${MOV_CSS.op};width:100%;margin-top:auto;${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
       <span class="mov-ico">${MOV_ACT[k].icono}</span>
       <span><strong>${titulo}</strong><em>${sub}</em></span>
       ${extra || ''}

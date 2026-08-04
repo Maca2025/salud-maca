@@ -1204,9 +1204,9 @@ tr.recomp-win td{background:#f0fdf4;}
 /* El separador entre lo que se HACE (las tarjetas de arriba) y lo que se
    REVISA (los bloques de abajo). Son dos modos distintos de usar la app y
    estaban pegados sin nada que los distinguiera. */
-.home-grid{position:relative;padding-top:22px;margin-top:6px;}
-.home-grid::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(0,0,0,.14) 18%,rgba(0,0,0,.14) 82%,transparent);}
+.home-grid{position:relative;padding-top:26px;margin-top:8px;}
+.home-grid::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.16) 15%,rgba(0,0,0,.16) 85%,transparent);}
 
 /* Dos columnas en pantalla ancha; en movil vuelve a una sola, porque la
    tarjeta de proteina no se puede partir a lo ancho de un telefono. */
