@@ -1201,6 +1201,13 @@ tr.recomp-win td{background:#f0fdf4;}
    La pantalla de inicio. Botones grandes: se usa con una mano
    a las seis de la mañana.
    ══════════════════════════════════════════════════════════ */
+/* El separador entre lo que se HACE (las tarjetas de arriba) y lo que se
+   REVISA (los bloques de abajo). Son dos modos distintos de usar la app y
+   estaban pegados sin nada que los distinguiera. */
+.home-grid{position:relative;padding-top:22px;margin-top:6px;}
+.home-grid::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.14) 18%,rgba(0,0,0,.14) 82%,transparent);}
+
 /* Dos columnas en pantalla ancha; en movil vuelve a una sola, porque la
    tarjeta de proteina no se puede partir a lo ancho de un telefono. */
 .hoy{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:20px;align-items:start;}

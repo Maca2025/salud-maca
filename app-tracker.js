@@ -800,7 +800,7 @@ function tarjetaBatido(){
 
   return `
     <div class="hoy-card">
-      <div class="hoy-hdr"><span>🥤 Batido</span>
+      <div class="hoy-hdr"><span class="pc-label" style="margin:0">Batido</span>
         <span class="hoy-sub">${lista.length
           ? `${lista.length} ${lista.length===1?'batido':'batidos'} · ${prot} g`
           : 'ninguno hoy'}</span></div>
@@ -871,7 +871,7 @@ function renderHoy(){
   const bloque = actual
     ? `<div class="hoy-card">
          <div class="hoy-hdr">
-           <span>${esc(actual.icon || '')} ${esc(actual.label || actual.id)} ·
+           <span class="pc-label" style="margin:0">${esc(actual.label || actual.id)} ·
              ${esc(actual.desde)}–${esc(actual.hasta || '')}</span>
            <span class="hoy-chip">ahora</span>
          </div>
@@ -881,7 +881,7 @@ function renderHoy(){
              a las ${esc(siguiente.desde)}</div>` : ''}
        </div>`
     : `<div class="hoy-card">
-         <div class="hoy-hdr"><span>💊 Suplementos</span></div>
+         <div class="hoy-hdr"><span class="pc-label" style="margin:0">Suplementos</span></div>
          <div class="hoy-sub">Ahora no toca ningún bloque.${siguiente
            ? ` El siguiente es <strong>${esc(siguiente.label || siguiente.id)}</strong>
                a las ${esc(siguiente.desde)}.` : ''}</div>
@@ -1218,17 +1218,21 @@ function tarjetaMovimiento(){
   const c = movCrono();
   const s = movSesion();
 
-  const hecho = hoy.map(e =>
-    `<div class="mov-hecho">✓ ${esc(e.actividad || e.tipo)}${
-      e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
+  /* Lo hecho hoy va encima de SU boton, no en una lista suelta arriba: asi se
+     lee de un vistazo que falta y que no. El tipo del registro da la columna. */
+  const COL = {fuerza:'fuerza', cardio:'caminata', suelo:'rebounder'};
+  const hechoDe = k => hoy.filter(e => COL[e.tipo] === k).map(e =>
+    `<div class="mov-hecho" style="padding:0 0 4px;font-size:.76rem">✓ ${
+      esc(e.actividad || e.tipo)}${e.minutos ? ` · ${e.minutos} min` : ''}</div>`).join('');
 
   const opcion = (k, titulo, sub, extra) => `
+    <div>${hechoDe(k)}
     <button class="mov-op" onclick="movElegir('${k}')"
-      style="${MOV_CSS.op};${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
+      style="${MOV_CSS.op};width:100%;${_movAct===k ? MOV_CSS.sel : ''}${c ? ';opacity:.5' : ''}" ${c ? 'disabled' : ''}>
       <span class="mov-ico">${MOV_ACT[k].icono}</span>
       <span><strong>${titulo}</strong><em>${sub}</em></span>
       ${extra || ''}
-    </button>`;
+    </button></div>`;
 
   const otras = SESIONES.map(x =>
     `<button class="blk-btn" style="width:100%;margin-bottom:5px;text-align:left"
@@ -1253,10 +1257,9 @@ function tarjetaMovimiento(){
 
   return `
     <div class="hoy-card hoy-ancho">
-      <div class="hoy-hdr"><span>🏃 Movimiento</span>
+      <div class="hoy-hdr"><span class="pc-label" style="margin:0">Movimiento</span>
         <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días${
           h.fuerza ? ` · ${h.fuerza} de fuerza` : ''}</span></div>
-      ${hecho}
       <div class="mov-ops" style="${MOV_CSS.ops}">
         ${opcion('fuerza', `Sesión ${s.id}`,
                  `${esc(s.nombre)} · ${MOV_ACT.fuerza.min} min`,
@@ -1451,7 +1454,7 @@ function tarjetaTirze(){
   if(!u){
     return `
       <div class="hoy-card">
-        <div class="hoy-hdr"><span>💉 Tirzepatida</span></div>
+        <div class="hoy-hdr"><span class="pc-label" style="margin:0">Tirzepatida</span></div>
         <div class="hoy-sub">Sin registrar todavía. Con la primera inyección la app
           empieza a contar el ciclo y a ordenar tu comida por día del ciclo.</div>
         <button class="blk-btn" style="width:100%;margin-top:9px"
@@ -1465,7 +1468,7 @@ function tarjetaTirze(){
   if(p.hoy || p.tarde){
     return `
       <div class="hoy-card" style="border-color:#f0b429">
-        <div class="hoy-hdr"><span>💉 Tirzepatida</span>
+        <div class="hoy-hdr"><span class="pc-label" style="margin:0">Tirzepatida</span>
           <span class="hoy-chip">${p.tarde ? Math.abs(p.faltan) + ' días tarde' : 'hoy'}</span></div>
         <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}toca en
           <strong>${esc(zonaSugerida())}</strong></div>
@@ -1476,7 +1479,7 @@ function tarjetaTirze(){
 
   return `
     <div class="hoy-card">
-      <div class="hoy-hdr"><span>💉 Tirzepatida</span>
+      <div class="hoy-hdr"><span class="pc-label" style="margin:0">Tirzepatida</span>
         <span class="hoy-sub">día ${ciclo} del ciclo</span></div>
       <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}la siguiente,
         el <strong>${esc(p.dia)}</strong>${p.faltan === 1 ? ' (mañana)' : ` (en ${p.faltan} días)`}.</div>

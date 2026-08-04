@@ -615,7 +615,7 @@ function initComposicion() {
   /* Mismo colapso por mes que la grafica de grasa vs masa magra, y con el mismo
      interruptor: D es el subconjunto visible, no DATA entera. La columna de
      objetivo se añade aparte y no depende de esto. */
-  const D = indicesRecomp().map(i => D[i]);
+  const D = indicesRecomp().map(i => DATA[i]);
   const n=D.length;
   const MET=objetivoMolecular();
   const sl=[...D.map(d=>d.fecha),'🎯 Objetivo'];
