@@ -940,7 +940,10 @@ function renderHoy(){
           <span class="hoy-fecha">${fechaLarga()}</span></div>
         <div class="hoy-estado">${lineaEstado()}</div>
       </div>
-      ${agua}${prot}${tarjetaBatido()}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
+      <!-- Dos columnas: proteina y agua · batido y suplementos.
+           Movimiento y tirzepatida van a lo ancho. En movil la rejilla
+           colapsa a una sola columna (media query en estilos.css). -->
+      ${prot}${agua}${tarjetaBatido()}${bloque}${tarjetaMovimiento()}${tarjetaTirze()}
     </div>`;
 }
 
@@ -1242,7 +1245,7 @@ function tarjetaMovimiento(){
   setTimeout(movLatido, 0);
 
   return `
-    <div class="hoy-card">
+    <div class="hoy-card hoy-ancho">
       <div class="hoy-hdr"><span>🏃 Movimiento</span>
         <span class="hoy-sub">${h.dias} de los últimos ${h.ventana} días${
           h.fuerza ? ` · ${h.fuerza} de fuerza` : ''}</span></div>
@@ -1440,7 +1443,7 @@ function tarjetaTirze(){
 
   if(!u){
     return `
-      <div class="hoy-card">
+      <div class="hoy-card hoy-ancho">
         <div class="hoy-hdr"><span>💉 Tirzepatida</span></div>
         <div class="hoy-sub">Sin registrar todavía. Con la primera inyección la app
           empieza a contar el ciclo y a ordenar tu comida por día del ciclo.</div>
@@ -1465,7 +1468,7 @@ function tarjetaTirze(){
   }
 
   return `
-    <div class="hoy-card">
+    <div class="hoy-card hoy-ancho">
       <div class="hoy-hdr"><span>💉 Tirzepatida</span>
         <span class="hoy-sub">día ${ciclo} del ciclo</span></div>
       <div class="hoy-sub">${dosisActual() ? dosisActual() + ' mg · ' : ''}la siguiente,
