@@ -239,7 +239,11 @@ function abrirAjustes(){
         </div>
         <div class="blk-field">
           <label>URL del Apps Script</label>
-          <input id="aj-url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(apiUrl())}">
+          <input id="aj-url" name="aj-endpoint" type="text" inputmode="url"
+                 autocomplete="one-time-code" spellcheck="false"
+                 autocapitalize="off" autocorrect="off"
+                 data-lpignore="true" data-1p-ignore data-form-type="other"
+                 placeholder="https://script.google.com/macros/s/.../exec" value="${esc(apiUrl())}">
         </div>
         <div class="blk-field">
           <label>Token</label>
