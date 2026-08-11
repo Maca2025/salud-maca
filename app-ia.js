@@ -247,7 +247,10 @@ function abrirAjustes(){
         </div>
         <div class="blk-field">
           <label>Token</label>
-          <input id="aj-token" type="password" autocomplete="off" placeholder="tu clave del Apps Script" value="${esc(apiToken())}">
+         <input id="aj-token" name="aj-clave" type="password"
+                 autocomplete="new-password" spellcheck="false"
+                 data-lpignore="true" data-1p-ignore data-form-type="other"
+                 placeholder="tu clave del Apps Script" value="${esc(apiToken())}">
         </div>
         <div style="font-size:.72rem;color:#999;line-height:1.5">
           El token debe coincidir con la variable <code>TOKEN</code> del Apps Script.
