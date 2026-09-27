@@ -1282,3 +1282,18 @@ tr.recomp-win td{background:#f0fdf4;}
 .fz-aviso{margin-top:12px;padding:9px 12px;background:#fffbeb;border-left:3px solid #f59e0b;
   font-size:.76rem;color:#78350f;line-height:1.55;}
 .fz-otras{margin-top:11px;font-size:.74rem;color:#888;}
+
+/* Mover un suplemento con toques (el arrastre no funciona en el iPhone) */
+.drag-handle { cursor:pointer; }
+@media (hover: none) { .drag-handle { padding:6px 8px; margin:-6px -4px -6px -8px; font-size:1.1rem; } }
+.mover-lbl { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+             color:#888; margin:4px 0 8px; }
+.mover-bloques { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.mover-bloque { display:flex; align-items:center; gap:10px; padding:11px 13px; border-radius:10px;
+                border:1.5px solid #e5e7eb; background:#fff; font-size:.92rem; text-align:left;
+                cursor:pointer; border-left:6px solid var(--c); }
+.mover-bloque.sel { background:#f1f5f9; border-color:var(--c); font-weight:700; }
+.mover-nombre { flex:1; }
+.mover-hora { font-size:.75rem; color:#888; }
+.mover-orden { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.mover-orden span { font-size:.8rem; color:#666; }

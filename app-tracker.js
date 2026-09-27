@@ -89,7 +89,7 @@ function renderConflictos(){
       <div>
         <strong>${esc(x.sups.join(' + '))}</strong> están juntos en
         <strong>${esc(x.bloque.icon)} ${esc(x.bloque.label)}</strong>.
-        <div class="conf-txt">${esc(x.titulo)} — compiten al absorberse: sepáralos arrastrando uno a otro bloque.</div>
+        <div class="conf-txt">${esc(x.titulo)} — compiten al absorberse: sepáralos moviendo uno a otro bloque (toca ⣿).</div>
       </div>
     </div>`).join('');
 }
@@ -187,7 +187,7 @@ function renderHorario() {
       <div class="sups-slot-body" data-blk-id="${b.id}">`;
 
     if(!items.length){
-      html += `<div class="blk-empty" style="pointer-events:none">Bloque vacío — arrastra un suplemento aquí</div>`;
+      html += `<div class="blk-empty" style="pointer-events:none">Bloque vacío — toca ⣿ en un suplemento para moverlo aquí</div>`;
     }
     items.forEach(s => {
       const alertIco = s.nivel===2?'🔴':s.nivel===1?'🟡':'';
@@ -196,7 +196,7 @@ function renderHorario() {
       // Sin casilla no se puede marcar, y sin marcar no ensucia el registro.
       if(supPorComprar(s)){
         html += `<div class="tracker-item por-comprar" id="ti-${s.id}" data-sup-id="${s.id}">
-          <span class="drag-handle" title="Arrastrar para mover o reordenar">⣿</span>
+          <span class="drag-handle" title="Toca para mover de bloque · o arrastra con el ratón" onclick="abrirMover('${s.id}')">⣿</span>
           <span class="tracker-cb-hueco" title="Todavía no lo tienes">🛒</span>
           <label>
             <strong>${esc(s.sustancia)} ${alertIco} <span class="tag-comprar">por comprar</span></strong>
@@ -212,7 +212,7 @@ function renderHorario() {
       const prn = supPRN(s);
       const cls = (trackerState[s.id] ? 'checked' : '') + (guardado ? ' ya-guardado' : '') + (prn ? ' prn' : '');
       html += `<div class="tracker-item ${cls}" id="ti-${s.id}" data-sup-id="${s.id}">
-        <span class="drag-handle" title="Arrastrar para mover o reordenar">⣿</span>
+        <span class="drag-handle" title="Toca para mover de bloque · o arrastra con el ratón" onclick="abrirMover('${s.id}')">⣿</span>
         <input type="checkbox" class="tracker-cb" id="cb-${s.id}" ${chk} onchange="toggleTracker('${s.id}',this)">
         <label for="cb-${s.id}">
           <strong>${esc(s.sustancia)} ${alertIco}${prn ? ' <span class="tag-prn">si lo necesitas</span>' : ''}</strong>
@@ -298,6 +298,65 @@ function commitLayoutFromDOM(){
   LAYOUT = nuevo;
   normalizeLayout();
   saveSupsConfig();
+}
+
+/* ── Mover con toques ──────────────────────────────────────────
+   Arrastrar solo funciona con ratón: en el iPhone el navegador no
+   dispara los eventos de arrastre. Tocar el ⣿ abre esta ventana,
+   que hace lo mismo con botones: elegir bloque y subir o bajar. */
+function abrirMover(supId){
+  const s = supById(supId); if(!s) return;
+  const actual = bloqueDeSup(supId);
+  const lista = actual ? (LAYOUT[actual.id] || []) : [];
+  const pos = lista.indexOf(supId);
+  const orden = [...BLOQUES].sort((x,y)=>(x.desde||'99:99').localeCompare(y.desde||'99:99'));
+  const host = document.getElementById('blk-modal-host');
+  if(!host) return;
+  host.innerHTML = `
+  <div class="blk-modal-bg" onmousedown="blkFondoDown(event,this)" onclick="blkFondoClick(event,this)">
+    <div class="blk-modal">
+      <div class="blk-modal-hdr">
+        <span>Mover ${esc(s.sustancia)}</span>
+        <button onclick="cerrarModalBloque()">×</button>
+      </div>
+      <div class="blk-modal-body">
+        <div class="mover-lbl">Bloque</div>
+        <div class="mover-bloques">
+          ${orden.map(b => `<button class="mover-bloque${actual && b.id===actual.id ? ' sel' : ''}"
+              style="--c:${esc(b.color)}" onclick="moverSupABloque('${esc(supId)}','${esc(b.id)}')">
+              <span>${esc(b.icon)}</span><span class="mover-nombre">${esc(b.label)}</span>
+              <span class="mover-hora">${esc(b.desde||'')}</span></button>`).join('')}
+        </div>
+        ${lista.length > 1 ? `<div class="mover-lbl">Orden dentro de ${esc(actual.label)}</div>
+        <div class="mover-orden">
+          <button class="blk-btn" ${pos<=0?'disabled':''} onclick="moverSupOrden('${esc(supId)}',-1)">↑ Subir</button>
+          <span>${pos+1} de ${lista.length}</span>
+          <button class="blk-btn" ${pos>=lista.length-1?'disabled':''} onclick="moverSupOrden('${esc(supId)}',1)">↓ Bajar</button>
+        </div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function moverSupABloque(supId, blkId){
+  const actual = bloqueDeSup(supId);
+  if(actual && actual.id === blkId){ cerrarModalBloque(); return; }
+  if(actual) LAYOUT[actual.id] = (LAYOUT[actual.id]||[]).filter(x => x !== supId);
+  (LAYOUT[blkId] = LAYOUT[blkId] || []).push(supId);
+  normalizeLayout(); saveSupsConfig();
+  cerrarModalBloque();
+  renderHorario();
+  if(typeof renderHoy === 'function') renderHoy();
+}
+
+function moverSupOrden(supId, delta){
+  const b = bloqueDeSup(supId); if(!b) return;
+  const l = LAYOUT[b.id], i = l.indexOf(supId), j = i + delta;
+  if(i < 0 || j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  saveSupsConfig();
+  renderHorario();
+  abrirMover(supId);   // sigue abierto para seguir moviendo
 }
 
 function attachDnD(){
@@ -738,14 +797,14 @@ function protObjetivo(){
   return {min: Math.round(kg*PROT_MIN), max: Math.round(kg*PROT_MAX)};
 }
 
-/* Marca un suplemento y lo guarda en el acto. Merge: solo suma. */
+/* Marca un suplemento y lo guarda en el acto. Merge: solo suma.
+   Desmarcar pide confirmación y va por desmarcarSup(). */
 async function tocarSup(id, cb){
   if(!cb.checked){
     cb.checked = true;
-    alert('Desde aquí solo se puede marcar, nunca desmarcar.\n\n' +
-          'Es lo que hace imposible que un toque por error borre lo del día. ' +
-          'Para corregir, ve a Suplementos → Horario & Tracker.');
-    return;
+    const s = supById(id);
+    if(!confirm(`¿Desmarcar ${s ? s.sustancia : id}?\n\nQuedará como no tomado hoy.`)) return;
+    return desmarcarSup(id, cb);
   }
   cb.disabled = true;
   try {
@@ -760,6 +819,42 @@ async function tocarSup(id, cb){
   } catch(e){
     cb.checked = false; cb.disabled = false;
     alert('No se pudo guardar: ' + e.message);
+  }
+}
+
+/* Desmarcar necesita reescribir el día, porque merge nunca convierte un 1
+   en 0. Para no pisar nada se lee lo que la hoja tiene AHORA (puede haber
+   cambiado desde otro dispositivo) y se manda el día completo tal cual,
+   con este único suplemento cambiado a «no tomado». */
+async function desmarcarSup(id, cb){
+  cb.disabled = true;
+  try {
+    const fecha = hoyISO();
+    const d = await api({action:'historial'});
+    const dia = (d.historial || []).find(e => e.fecha === fecha);
+    const tomas = Object.assign({}, dia ? dia.tomas : {});
+    tomas[id] = false;
+    const tomados = [], todos = [], pendientes = [];
+    supsEnJuego().forEach(s => {
+      if(tomas[s.id] === true) tomados.push(s.id);
+      else if(tomas[s.id] === false) todos.push(s.id);
+      else pendientes.push(s.id);
+    });
+    await api({action:'save', fecha, hora:horaAhora(), modo:'reemplazo',
+      tomados:tomados.join(','), todos:todos.concat(tomados).join(','), pendientes:pendientes.join(',')});
+    let h = (HIST || []).find(x => x.fecha === fecha);
+    if(!h){ h = {fecha, hora:horaAhora(), tomas:{}, nota:''}; HIST.unshift(h); }
+    h.tomas = tomas;
+    if(typeof trackerState === 'object' && fechaActiva === fecha){
+      trackerState[id] = false;
+      if(yaRegistrado) yaRegistrado[id] = false;
+      guardarBorrador();
+    }
+    renderHoy();
+    if(typeof renderHorario === 'function' && document.getElementById('sups-horario-container')) renderHorario();
+  } catch(e){
+    cb.checked = true; cb.disabled = false;
+    alert('No se pudo desmarcar: ' + e.message);
   }
 }
 
