@@ -15,7 +15,7 @@
   <link rel="icon" href="icon-app.png"/>
   <title>Maca · Salud</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="estilos.css?v=20260804k"/>
+  <link rel="stylesheet" href="estilos.css?v=20260927a"/>
 </head>
 <body>
 
@@ -480,6 +480,7 @@
     <button class="sups-tab-btn" onclick="switchSupsTab('protocolo',this)">📋 Protocolo</button>
     <button class="sups-tab-btn" onclick="switchSupsTab('interacciones',this)">⚠️ Interacciones</button>
     <button class="sups-tab-btn" onclick="switchSupsTab('registro',this);cargarRegistro()">📊 Registro</button>
+    <button class="sups-tab-btn" onclick="switchSupsTab('lote',this);cargarLote()">✍️ Registro en lote</button>
   </div>
 
   <!-- Horario + Tracker -->
@@ -506,7 +507,7 @@
     <div class="blk-toolbar">
       <button class="blk-add-btn" onclick="abrirModalBloque(null)">＋ Nuevo bloque</button>
       <button class="blk-add-btn" style="border-style:solid;border-color:#d4edde" onclick="resetBloques()">↺ Restaurar bloques por defecto</button>
-      <span class="blk-hint">Arrastra ⣿ para mover un suplemento entre bloques o reordenarlo.</span>
+      <span class="blk-hint">Toca ⣿ para mover un suplemento de bloque o de orden (con ratón también puedes arrastrarlo).</span>
     </div>
     <div id="sups-horario-container"></div>
   </div>
@@ -546,6 +547,11 @@
     <div id="reg-view-adherencia" style="display:none">
       <div id="reg-adh-container"><p class="reg-status">Carga el historial primero.</p></div>
     </div>
+  </div>
+
+  <!-- Registro en lote: una semana a la vista, pensado para la computadora -->
+  <div class="sups-tab-panel" id="stab-lote">
+    <div id="lote-container"><p class="reg-status">Cargando…</p></div>
   </div>
 
   <!-- Modal de creación/edición de bloque (lo llena abrirModalBloque) -->
@@ -644,21 +650,22 @@
      HTML MODULE: FOOTER
 ══════════════════════════════════════════════════════════ -->
 <footer id="pie">Datos cargados desde Google Sheets</footer>
-<script src="app-datos.js?v=20260804k"></script>
-<script src="app-base.js?v=20260804k"></script>
-<script src="app-composicion.js?v=20260804k"></script>
-<script src="app-laboratorio.js?v=20260804k"></script>
-<script src="app-planes.js?v=20260804k"></script>
-<script src="app-suplementos.js?v=20260804k"></script>
-<script src="app-ingesta.js?v=20260804k"></script>
-<script src="app-alimentos.js?v=20260804k"></script>
-<script src="app-tracker.js?v=20260804k"></script>
-<script src="app-editar.js?v=20260804k"></script>
-<script src="app-registro.js?v=20260804k"></script>
-<script src="app-fotos.js?v=20260804k"></script>
-<script src="app-nav.js?v=20260804k"></script>
-<script src="app-macros.js?v=20260804k"></script>
-<script src="app-formularios.js?v=20260804k"></script>
-<script src="app-ia.js?v=20260804k"></script>
+<script src="app-datos.js?v=20260927a"></script>
+<script src="app-base.js?v=20260927a"></script>
+<script src="app-composicion.js?v=20260927a"></script>
+<script src="app-laboratorio.js?v=20260927a"></script>
+<script src="app-planes.js?v=20260927a"></script>
+<script src="app-suplementos.js?v=20260927a"></script>
+<script src="app-ingesta.js?v=20260927a"></script>
+<script src="app-alimentos.js?v=20260927a"></script>
+<script src="app-tracker.js?v=20260927a"></script>
+<script src="app-editar.js?v=20260927a"></script>
+<script src="app-registro.js?v=20260927a"></script>
+<script src="app-lote.js?v=20260927a"></script>
+<script src="app-fotos.js?v=20260927a"></script>
+<script src="app-nav.js?v=20260927a"></script>
+<script src="app-macros.js?v=20260927a"></script>
+<script src="app-formularios.js?v=20260927a"></script>
+<script src="app-ia.js?v=20260927a"></script>
 </body>
 </html>

@@ -1297,3 +1297,33 @@ tr.recomp-win td{background:#f0fdf4;}
 .mover-hora { font-size:.75rem; color:#888; }
 .mover-orden { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .mover-orden span { font-size:.8rem; color:#666; }
+
+/* Registro en lote: semana a la vista */
+.lote-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.lote-rango { font-weight:700; font-size:.95rem; min-width:150px; text-align:center; }
+.lote-n { font-size:.8rem; color:#555; }
+.lote-ayuda { font-size:.76rem; color:#666; margin:4px 0 10px; line-height:1.5; }
+.lote-ok { background:#ecfdf3; color:#15803d; border-radius:9px; padding:8px 12px; font-weight:600;
+           font-size:.85rem; margin-bottom:10px; }
+.lote-tabla { width:100%; border-collapse:collapse; font-size:.82rem; background:#fff; }
+.lote-tabla th, .lote-tabla td { border-bottom:1px solid #eef0f2; }
+.lote-nom { text-align:left; padding:6px 8px; min-width:190px; }
+.lote-nom em { display:block; font-style:normal; font-size:.7rem; color:#999; }
+th.lote-nom { background:#42525E; color:#fff; font-size:.72rem; }
+.lote-dia { text-align:center; background:#42525E; color:#fff; padding:5px 4px; min-width:64px; cursor:pointer; line-height:1.15; }
+.lote-dia span, .lote-dia small { display:block; font-size:.62rem; font-weight:500; opacity:.8; }
+.lote-dia strong { display:block; font-size:1rem; }
+.lote-dia.hoy { background:#2d6a4f; }
+.lote-dia.sin-reg { background:#8a6d1f; }
+.lote-dia.futuro { background:#9aa3ab; cursor:default; }
+.lote-dia:not(.futuro):hover { filter:brightness(1.15); }
+.lote-grupo td { background:#f5f7f8; font-weight:700; font-size:.76rem; padding:6px 8px; color:#2E3A44; }
+.lote-grupo td span { font-weight:500; color:#888; margin-left:6px; }
+.lote-celda { text-align:center; cursor:pointer; font-weight:800; font-size:.95rem; user-select:none;
+              height:34px; min-width:48px; }
+.lote-celda.si { color:#15803d; background:#f0f9f3; }
+.lote-celda.no { color:#b45309; background:#fffbeb; }
+.lote-celda.nada { color:#cfd4d8; }
+.lote-celda.cambiado { outline:2px solid #2b50a0; outline-offset:-3px; }
+.lote-celda.futuro { background:#fafafa; cursor:default; }
+.lote-celda:not(.futuro):hover { background:#e8eef9; }
