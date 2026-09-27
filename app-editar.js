@@ -122,6 +122,7 @@ function editarSuplemento(id){
               <option value="diario"  ${frecuenciaDe(s)==='diario'?'selected':''}>Todos los días</option>
               <option value="alterno" ${frecuenciaDe(s)==='alterno'?'selected':''}>Días alternos</option>
               <option value="semanal" ${frecuenciaDe(s)==='semanal'?'selected':''}>Una vez por semana</option>
+              <option value="necesidad" ${frecuenciaDe(s)==='necesidad'?'selected':''}>Cuando lo necesite</option>
             </select>
           </div>
           <div class="form-campo">

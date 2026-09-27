@@ -708,7 +708,10 @@ async function guardarDia() {
 
   const enJuego    = supsEnJuego();
   const tomados    = enJuego.filter(s => trackerState[s.id]).map(s => s.id);
-  const pendientes = enJuego.filter(s => !trackerState[s.id] && supEnEspera(s)).map(s => s.id);
+  // En espera por la hora: su bloque aún no llega.
+  const esperaHora = new Set(enJuego.filter(s => !trackerState[s.id] && supEnEspera(s)).map(s => s.id));
+  // «Cuando lo necesite» sin marcar tampoco es un cero: no se tomó porque no hizo falta.
+  const pendientes = enJuego.filter(s => !trackerState[s.id] && (esperaHora.has(s.id) || supPRN(s))).map(s => s.id);
   const espera     = new Set(pendientes);
   const todos      = enJuego.filter(s => !espera.has(s.id)).map(s => s.id);
 
@@ -718,7 +721,7 @@ async function guardarDia() {
   // no se van a degradar, se van a dejar como estaban.
   if(yaRegistrado){
     const perdidos = Object.keys(yaRegistrado)
-      .filter(id => yaRegistrado[id] && !trackerState[id] && !espera.has(id));
+      .filter(id => yaRegistrado[id] && !trackerState[id] && !esperaHora.has(id));
     if(perdidos.length){
       const nombres = perdidos
         .map(id => { const s = SUPS.find(x=>x.id===id); return s ? s.sustancia : id; })

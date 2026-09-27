@@ -1117,6 +1117,12 @@ tr.recomp-win td{background:#f0fdf4;}
                letter-spacing:.06em; background:#fef3c7; color:#92400e; padding:1px 6px;
                border-radius:10px; margin-left:5px; vertical-align:middle; }
 
+/* «Cuando lo necesite»: se marca a mano y no cuenta en el progreso */
+.tag-prn { display:inline-block; font-size:.6rem; font-weight:800; text-transform:uppercase;
+           letter-spacing:.06em; background:#e0e7ff; color:#3730a3; padding:1px 6px;
+           border-radius:10px; margin-left:5px; vertical-align:middle; }
+.tracker-item.prn { background:#f8f9ff; }
+
 /* Días con bloques sin responder */
 .adh-abierto { background:#fffbeb; border:1.5px solid #fcd34d; border-radius:10px;
                padding:10px 13px; margin-top:10px; font-size:.78rem; color:#78350f; line-height:1.5; }

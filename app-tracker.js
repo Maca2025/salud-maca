@@ -102,7 +102,7 @@ function renderPendientes(){
   // Completando un día pasado no hay nada "para más tarde" — hay que decir
   // qué día se está completando y quitarse de en medio.
   if(fechaActiva !== hoyISO()){
-    const enJuego = supsEnJuego();
+    const enJuego = supsCuentan();
     const hechos  = enJuego.filter(s=>trackerState[s.id]).length;
     cont.innerHTML = `<div class="pend-box pend-retro">
       📅 Estás completando <strong>${fechaBonita(fechaActiva)}</strong> — llevas ${hechos} de ${enJuego.length}.
@@ -113,13 +113,13 @@ function renderPendientes(){
 
   const grupos = {ahora:[], pasado:[], proximo:[]};
   BLOQUES.forEach(b=>{
-    const faltan = idsEnJuego(LAYOUT[b.id]).filter(id => !trackerState[id]);
+    const faltan = idsCuentan(LAYOUT[b.id]).filter(id => !trackerState[id]);
     if(!faltan.length) return;
     const est = estadoBloque(b);
     if(grupos[est]) grupos[est].push({b, n:faltan.length});
   });
 
-  const enJuego = supsEnJuego();
+  const enJuego = supsCuentan();
   const total = enJuego.length;
   const hechos = enJuego.filter(s=>trackerState[s.id]).length;
 
@@ -160,7 +160,7 @@ function renderHorario() {
     const items = ids.map(supById).filter(Boolean);
     // Los pendientes de comprar se ven, pero no cuentan para el progreso:
     // un frasco que no tienes en casa no es un olvido.
-    const activos = items.filter(s => !supPorComprar(s));
+    const activos = items.filter(s => !supPorComprar(s) && !supPRN(s));
     const done  = activos.filter(s => trackerState[s.id]).length;
     const pct   = activos.length ? Math.round(done / activos.length * 100) : 0;
     const todosMarcados = activos.length > 0 && done === activos.length;
@@ -209,12 +209,13 @@ function renderHorario() {
 
       const chk = trackerState[s.id] ? 'checked' : '';
       const guardado = !!(yaRegistrado && yaRegistrado[s.id]);
-      const cls = (trackerState[s.id] ? 'checked' : '') + (guardado ? ' ya-guardado' : '');
+      const prn = supPRN(s);
+      const cls = (trackerState[s.id] ? 'checked' : '') + (guardado ? ' ya-guardado' : '') + (prn ? ' prn' : '');
       html += `<div class="tracker-item ${cls}" id="ti-${s.id}" data-sup-id="${s.id}">
         <span class="drag-handle" title="Arrastrar para mover o reordenar">⣿</span>
         <input type="checkbox" class="tracker-cb" id="cb-${s.id}" ${chk} onchange="toggleTracker('${s.id}',this)">
         <label for="cb-${s.id}">
-          <strong>${esc(s.sustancia)} ${alertIco}</strong>
+          <strong>${esc(s.sustancia)} ${alertIco}${prn ? ' <span class="tag-prn">si lo necesitas</span>' : ''}</strong>
           <em>${esc(s.dosis)} · ${esc(s.formato)}</em>
           <span>${esc(s.absorcion)}</span>
         </label>
@@ -241,7 +242,7 @@ function toggleTracker(id, cb) {
   if (item) item.classList.toggle('checked', cb.checked);
   const b = bloqueDeSup(id);
   if (!b) return;
-  const ids  = idsEnJuego(LAYOUT[b.id]);
+  const ids  = idsCuentan(LAYOUT[b.id]);
   const done = ids.filter(x => trackerState[x]).length;
   const pct  = ids.length ? Math.round(done/ids.length*100) : 0;
   const bar = document.getElementById('pbar-'+b.id);
@@ -266,7 +267,8 @@ function resetTracker() {
 
 /* Marca o desmarca todos los suplementos de un bloque de una vez. */
 function toggleBloque(blkId){
-  const ids = idsEnJuego(LAYOUT[blkId]);
+  // «Cuando lo necesite» no entra en «todo»: se marca a mano, uno por uno.
+  const ids = idsCuentan(LAYOUT[blkId]);
   if(!ids.length) return;
   const todosMarcados = ids.every(id => trackerState[id]);
   ids.forEach(id => { trackerState[id] = !todosMarcados; });
@@ -859,14 +861,19 @@ function renderHoy(){
   const sups = supsDeBloque(actual);
   const tomas = tomasDeHoy();
 
-  const listaSups = sups.map(s => {
+  const filaSup = s => {
     const hecho = tomas[s.id] === true;
     return `<label class="${hecho ? 'hecho' : ''}">
       <input type="checkbox" ${hecho ? 'checked' : ''}
         onchange="tocarSup('${esc(s.id)}',this)">
       <span><strong>${esc(s.sustancia || s.id)}</strong>
         ${s.dosis ? `<em>${esc(s.dosis)}</em>` : ''}</span></label>`;
-  }).join('');
+  };
+  // «Cuando lo necesite» va aparte: no es parte de lo que toca, es opcional.
+  const fijos = sups.filter(s => !supPRN(s)), opcionales = sups.filter(supPRN);
+  const listaSups = fijos.map(filaSup).join('') + (opcionales.length
+    ? `<div class="hoy-sub" style="margin-top:8px">Si lo necesitas:</div>` + opcionales.map(filaSup).join('')
+    : '');
 
   const bloque = actual
     ? `<div class="hoy-card">

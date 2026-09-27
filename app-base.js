@@ -53,7 +53,7 @@ function fondoClick(ev, el){
 
      unidades   piezas que trae el envase
      por_toma   piezas que te tragas cada vez que marcas la casilla
-     frecuencia diario / alterno / semanal
+     frecuencia diario / alterno / semanal / necesidad
      envase_de  id de la fila de la que sale el frasco
 
    `envase_de` es el que evita contar dos veces: `calcio` y `calcio_noche`
@@ -64,7 +64,7 @@ function fondoClick(ev, el){
    Las columnas llegan de la hoja en snake_case; el cliente ha usado
    camelCase en otras partes. Se aceptan las dos por si acaso.
    ──────────────────────────────────────────────────────────── */
-const FACTOR_FREQ = {diario: 1, alterno: 0.5, semanal: 1/7};
+const FACTOR_FREQ = {diario: 1, alterno: 0.5, semanal: 1/7, necesidad: 0};
 
 function campo_(s, snake, camel){
   const v = (s && (s[snake] != null && s[snake] !== '' ? s[snake] : s[camel]));
@@ -74,8 +74,14 @@ function unidadesDe(s){ const n = Number(campo_(s,'unidades','unidades')); retur
 function porTomaDe(s){  const n = Number(campo_(s,'por_toma','porToma'));   return n > 0 ? n : 1; }
 function frecuenciaDe(s){
   const f = String(campo_(s,'frecuencia','frecuencia')).trim().toLowerCase();
-  return FACTOR_FREQ[f] ? f : 'diario';
+  return (f in FACTOR_FREQ) ? f : 'diario';
 }
+
+/* «Cuando lo necesite»: se toma algunos días y otros no, a propósito.
+   Marcarlo registra la toma; dejarlo sin marcar NO es un olvido, así que
+   se guarda como «sin respuesta» y no cuenta en el progreso del bloque ni
+   en el porcentaje de adherencia. El registro muestra cuántas veces se tomó. */
+function supPRN(s){ return frecuenciaDe(s) === 'necesidad'; }
 /* id de la fila que tiene el envase. Si no se declara, cada uno es el suyo. */
 function envaseDe(s){ return String(campo_(s,'envase_de','envaseDe')).trim() || (s && s.id) || ''; }
 
@@ -166,6 +172,9 @@ function stockDe(id){
 /* Los suplementos que de verdad entran en los cálculos del día. */
 function supsEnJuego(){ return SUPS.filter(s => !supPorComprar(s)); }
 function idsEnJuego(ids){ return (ids||[]).filter(id => { const s = supById(id); return s && !supPorComprar(s); }); }
+/* Los que cuentan para el progreso y la adherencia: en juego y no «cuando lo necesite». */
+function supsCuentan(){ return supsEnJuego().filter(s => !supPRN(s)); }
+function idsCuentan(ids){ return idsEnJuego(ids).filter(id => !supPRN(supById(id))); }
 
 function mkLine(id, datasets, yOpts={}, extraOpts={}) {
   const labels = DATA.map(d=>d.fecha);

@@ -157,8 +157,17 @@ function renderAdherencia(entries) {
   // Antes el denominador era "días con cualquier registro", así que un día
   // guardado a mediodía castigaba a todo lo de la noche. Ahora cada uno se
   // mide solo contra los días en que de verdad contestaste por él.
-  const filas = ordenSupsParaRegistro()
-    .filter(f => !supPorComprar(supById(f.id)))
+  const todasFilas = ordenSupsParaRegistro()
+    .filter(f => !supPorComprar(supById(f.id)));
+  // «Cuando lo necesite» no tiene porcentaje: no tomarlo no es fallar.
+  // Se cuenta cuántas veces se tomó en los últimos 30 días.
+  const desde30 = (()=>{ const d=new Date(today); d.setDate(d.getDate()-29);
+    return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; })();
+  const prnFilas = todasFilas.filter(f => supPRN(supById(f.id))).map(f => ({...f,
+    veces: dias.filter(d => d >= desde30 && porDia[d][f.id] === true).length,
+    ultima: dias.filter(d => porDia[d][f.id] === true).pop() || ''}));
+  const filas = todasFilas
+    .filter(f => !supPRN(supById(f.id)))
     .map(f=>{
       const base  = dias.filter(d => f.id in porDia[d]).length;
       const count = dias.filter(d => porDia[d][f.id] === true).length;
@@ -217,6 +226,19 @@ function renderAdherencia(entries) {
     </div>`;
   });
   h += '</div>';
+  if(prnFilas.length){
+    h += `<div class="adh-nota" style="margin-top:14px"><strong>Cuando lo necesitas</strong> — no tiene porcentaje:
+      no tomarlo no es un olvido. Veces que lo tomaste en los últimos 30 días:</div><div class="adh-list">`;
+    prnFilas.forEach(f => {
+      h += `<div class="adh-item">
+        <div class="adh-slot-dot" style="background:${f.color}"></div>
+        <span class="adh-name">${esc(f.sustancia)}</span>
+        <span class="adh-frac">${f.ultima ? 'última: '+f.ultima.slice(8,10)+'/'+f.ultima.slice(5,7) : 'sin tomas'}</span>
+        <span class="adh-pct" style="color:#3730a3;width:auto">${f.veces} ${f.veces===1?'vez':'veces'}</span>
+      </div>`;
+    });
+    h += '</div>';
+  }
   adh.innerHTML = h;
 }
 
@@ -233,14 +255,15 @@ function renderCalendario(entries){
     const iso = entryFechaISO(e); if(!iso) return;
     if(!porDia[iso]) porDia[iso] = {};
     const t = entryTomas(e);
-    Object.keys(t).forEach(id=>{ if(t[id]) porDia[iso][id]=true; });
+    Object.keys(t).forEach(id=>{ const s = supById(id);
+      if(t[id] && !(s && supPRN(s))) porDia[iso][id]=true; });
     if(e.nota) notasPorDia[iso] = e.nota;
   });
 
   // Los pendientes de comprar no cuentan: si no, la intensidad del día
   // sale siempre baja por suplementos que ni siquiera tienes en casa.
   const totalSups = Math.max(1, ordenSupsParaRegistro()
-    .filter(f => !supPorComprar(supById(f.id))).length);
+    .filter(f => { const s = supById(f.id); return !supPorComprar(s) && !supPRN(s); }).length);
   if(!_calMes){
     const ult = Object.keys(porDia).sort().pop();
     const d = ult ? new Date(ult+'T00:00:00') : new Date();
