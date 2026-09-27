@@ -767,14 +767,7 @@ function semanasIngesta(){
   });
 
   // Composición: medición más cercana al inicio y al final de cada semana
-  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const fechaDeMedicion = (m, anio) => {
-    const p = String(m.fecha).split('-');
-    if(p.length!==2) return null;
-    const mes = MESES.indexOf(p[1]);
-    if(mes<0) return null;
-    return new Date(anio, mes, parseInt(p[0],10));
-  };
+  const fechaDeMedicion = m => fechaMedicion(m);
 
   return Object.values(sem).sort((a,b)=>a.inicio.localeCompare(b.inicio)).map(s=>{
     const ini = new Date(s.inicio+'T00:00:00');

@@ -145,15 +145,11 @@ async function pintarMinis(root){
 /* Medición más cercana a una fecha, si cae dentro de tres semanas. */
 function medicionCerca(iso){
   if(!DATA.length) return null;
-  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const objetivo = new Date(iso+'T00:00:00');
   let mejor = null, dif = Infinity;
   DATA.forEach(m=>{
-    const p = String(m.fecha).split('-');
-    if(p.length!==2) return;
-    const mes = MESES.indexOf(p[1]);
-    if(mes<0) return;
-    const d = new Date(objetivo.getFullYear(), mes, parseInt(p[0],10));
+    const d = fechaMedicion(m);
+    if(!d) return;
     const dd = Math.abs(d-objetivo);
     if(dd < dif){ dif = dd; mejor = m; }
   });

@@ -558,7 +558,7 @@ function initResumen() {
   const labels=DATA.map(d=>d.fecha);
   mkLine('cPeso',[ds('Peso kg',DATA.map(d=>d.peso),G,{fill:true})]);
   mkLine('cGrasaSMM',[ds('Grasa kg',DATA.map(d=>d.grasa),R),ds('SMM músculo kg',DATA.map(d=>d.smm),B)]);
-  mkLine('cPBF',[ds('% Grasa',DATA.map(d=>d.pbf),O,{fill:true})],{min:48,max:55});
+  mkLine('cPBF',[ds('% Grasa',DATA.map(d=>d.pbf),O,{fill:true})],rangoAuto(DATA.map(d=>d.pbf)));
   if(chartReg.cScore) chartReg.cScore.destroy();
   chartReg.cScore=new Chart(document.getElementById('cScore'),{type:'line',
     data:{labels,datasets:[
@@ -569,14 +569,14 @@ function initResumen() {
       plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
       scales:{
         x:{grid:{color:GRID},ticks:{font:{size:9},maxRotation:45}},
-        yS:{type:'linear',position:'left',grid:{color:GRID},ticks:{font:{size:9}},min:43,max:54},
-        yB:{type:'linear',position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:9}},min:37,max:45}
+        yS:{type:'linear',position:'left',grid:{color:GRID},ticks:{font:{size:9}},...rangoAuto(DATA.map(d=>d.score))},
+        yB:{type:'linear',position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:9}},...rangoAuto(DATA.map(d=>d.bmi))}
       },
       elements:{point:{radius:3,hoverRadius:5}}}});
   mkLine('cAgua',[ds('ECF',DATA.map(d=>d.ecf),B),ds('ICF',DATA.map(d=>d.icf),G)]);
-  mkLine('cProt',[ds('Proteínas kg',DATA.map(d=>d.prot),P,{fill:true})],{min:9,max:12});
-  mkLine('cMin', [ds('Minerales kg',DATA.map(d=>d.min),O,{fill:true})],{min:3,max:4.5});
-  mkLine('cTMB', [ds('TMB kcal',DATA.map(d=>d.tmb),G,{fill:true})],{min:1400,max:1620});
+  mkLine('cProt',[ds('Proteínas kg',DATA.map(d=>d.prot),P,{fill:true})],rangoAuto(DATA.map(d=>d.prot)));
+  mkLine('cMin', [ds('Minerales kg',DATA.map(d=>d.min),O,{fill:true})],rangoAuto(DATA.map(d=>d.min)));
+  mkLine('cTMB', [ds('TMB kcal',DATA.map(d=>d.tmb),G,{fill:true})],rangoAuto(DATA.map(d=>d.tmb)));
 }
 
 /* Reparto molecular del objetivo. La fila OBJETIVO traia los valores de marzo,
@@ -672,7 +672,9 @@ function initComposicion() {
       },
       scales:{
         x:{stacked:true, grid:{color:GRID}, ticks:{font:c=>({size:9,weight:c.tick?.label==='🎯 Objetivo'?'bold':'normal'}), color:c=>c.tick?.label==='🎯 Objetivo'?'#2d6a4f':'#666', maxRotation:45}},
-        y:{stacked:true, grid:{color:GRID}, ticks:{font:{size:9}}, min:0, max:125}
+        y:{stacked:true, grid:{color:GRID}, ticks:{font:{size:9}}, min:0,
+          // Espacio para la etiqueta de cambio encima de la barra más alta
+          suggestedMax: Math.ceil(Math.max(...D.map(d=>d.peso||0), 0) * 1.08 / 5) * 5 || undefined}
       }
     },
     plugins:[dp]

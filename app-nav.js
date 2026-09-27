@@ -78,7 +78,7 @@ function hidratar(d){
   DATA = (d.composicion || []).map(m => ({
     fecha: m.fecha, peso: m.peso, ecf: m.ecf, icf: m.icf, prot: m.prot, min: m.min,
     grasa: m.grasa, smm: m.smm, pbf: m.pbf, bmi: m.bmi, score: m.score,
-    tmb: m.tmb, grasaVisc: m.grasaVisc
+    tmb: m.tmb, grasaVisc: m.grasaVisc, dias: m.dias
   }));
   DAYS = (d.composicion || []).map(m => m.dias);
   if(d.objetivo) OBJ = Object.assign({}, OBJ, d.objetivo);

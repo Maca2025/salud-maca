@@ -290,9 +290,22 @@ interacciones — se sirve desde el Apps Script.
 - El selector **Día** permite completar una fecha pasada.
 - Si al guardar se fuera a dejar como *no tomada* alguna toma ya registrada, la
   app avisa antes.
-- El handle **⣿** arrastra un suplemento a otro bloque *(solo con ratón; en
-  móvil todavía no funciona)*.
+- Tocar el **⣿** abre una ventana para mover el suplemento a otro bloque o
+  cambiarlo de orden. Funciona en el celular; con ratón también se puede arrastrar.
+- En **Protocolo → Editar → Cada cuánto** existe **Cuando lo necesite**: se
+  marca a mano, sin marcar no cuenta como olvido y el registro muestra cuántas
+  veces se tomó en 30 días en vez de un porcentaje.
 - **＋ Nuevo bloque** crea una franja con nombre, horario, descripción y color.
+
+**Suplementos → Registro en lote** (pensado para la computadora)
+
+- Una semana a la vista: una fila por suplemento, una columna por día.
+- Tocar una celda la gira entre ✓ tomado, ✗ no tomado y · sin respuesta.
+  Tocar el día marca como tomado todo lo que falta ese día.
+- Al guardar se relee la hoja y se aplican encima solo los cambios.
+
+**Pantalla Hoy**: marcar guarda al instante. Desmarcar pide confirmación y
+reescribe el día leyendo antes lo que la hoja tiene.
 
 **Suplementos → Registro**
 

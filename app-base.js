@@ -208,6 +208,26 @@ function mkLineC(id, lbs, datasets, yOpts={}) {
     }
   });
 }
+/* Fecha real de una medición. La hoja guarda la fecha como «16-mar», sin
+   año, así que en enero «12-ene» se confundía con el enero anterior. El dato
+   fiable es `dias` (días desde el inicio de la serie): de ahí sale la fecha
+   con su año. Si faltara, se adivina el año más cercano a hoy. */
+function fechaMedicion(m){
+  if(m && m.dias != null && m.dias !== '' && isFinite(m.dias)){
+    const d = new Date(START_DATE.getFullYear(), START_DATE.getMonth(), START_DATE.getDate());
+    d.setDate(d.getDate() + Number(m.dias));
+    return d;
+  }
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const p = String((m && m.fecha) || '').split('-');
+  const mes = MESES.indexOf(p[1]);
+  if(p.length !== 2 || mes < 0) return null;
+  const hoy = new Date();
+  let d = new Date(hoy.getFullYear(), mes, parseInt(p[0],10));
+  if(d - hoy > 60*86400000) d = new Date(hoy.getFullYear()-1, mes, parseInt(p[0],10));
+  return d;
+}
+
 /* Escala del eje Y a partir de los datos, con un margen arriba y abajo.
    Antes cada gráfica traía su mínimo y máximo escritos a mano y los datos
    nuevos que se salían de ese rango quedaban cortados fuera del dibujo.
@@ -221,7 +241,7 @@ function rangoAuto(valores, extra=[], opts={}){
   lo -= pad; hi += pad;
   if(opts.piso != null) lo = Math.max(opts.piso, lo);
   const paso = opts.redondeo || Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, hi - lo))) - 1) * 5;
-  return {min: Math.floor(lo / paso) * paso, max: Math.ceil(hi / paso) * paso};
+  return {min: +(Math.floor(lo / paso) * paso).toFixed(6), max: +(Math.ceil(hi / paso) * paso).toFixed(6)};
 }
 
 function ds(label, data, color, opts={}) {
