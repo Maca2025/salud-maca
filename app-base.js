@@ -208,6 +208,22 @@ function mkLineC(id, lbs, datasets, yOpts={}) {
     }
   });
 }
+/* Escala del eje Y a partir de los datos, con un margen arriba y abajo.
+   Antes cada gráfica traía su mínimo y máximo escritos a mano y los datos
+   nuevos que se salían de ese rango quedaban cortados fuera del dibujo.
+   `extra` son valores que también deben verse (líneas de referencia).
+   `piso` evita que la escala baje de un valor (p. ej. 0 en un conteo). */
+function rangoAuto(valores, extra=[], opts={}){
+  const v = [].concat(valores||[], extra||[]).filter(x => x !== null && x !== undefined && x !== '').map(Number).filter(x => isFinite(x));
+  if(!v.length) return {};
+  let lo = Math.min(...v), hi = Math.max(...v);
+  const pad = (hi - lo) * (opts.margen != null ? opts.margen : 0.12) || Math.abs(hi) * 0.05 || 1;
+  lo -= pad; hi += pad;
+  if(opts.piso != null) lo = Math.max(opts.piso, lo);
+  const paso = opts.redondeo || Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, hi - lo))) - 1) * 5;
+  return {min: Math.floor(lo / paso) * paso, max: Math.ceil(hi / paso) * paso};
+}
+
 function ds(label, data, color, opts={}) {
   return {label, data, borderColor:color, backgroundColor:color+'22', fill:false, tension:0.3, ...opts};
 }

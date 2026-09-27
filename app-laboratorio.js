@@ -20,8 +20,8 @@ function renderStatusPanel() {
 }
 
 function sCell(key, i, dateLabel) {
-  const v = SD[key][i];
-  if(v===null) return '<td class="val-none">—</td>';
+  const v = (SD[key] || [])[i];
+  if(v===null || v===undefined || v==='') return '<td class="val-none">—</td>';
   const [lo, hi] = SR[key];
   const tooLow  = lo!==null && v<lo;
   const tooHigh = hi!==null && v>hi;
@@ -180,15 +180,17 @@ function initSangre() {
     return {label:lbl, data:SFECHAS.map(()=>val), borderColor:'#ef444488',
       borderDash:[5,3], pointRadius:0, fill:false, tension:0};
   }
-  mkLineC('cTSH', SFECHAS,[ds('TSH',SD.tsh,'#e74c3c',{spanGaps:false}),refLine(4.45,'Límite (4.45)')],{min:0,max:8});
-  mkLineC('cVitD',SFECHAS,[ds('Vitamina D',SD.vitD,'#2980b9',{spanGaps:true,fill:true}),refLine(30,'Suficiencia (30)')],{min:0,max:55});
-  mkLineC('cHgb', SFECHAS,[ds('Hemoglobina',SD.hgb,'#8e44ad',{fill:true}),refLine(12.0,'Mín. (12.0)')],{min:10.5,max:14.5});
-  mkLineC('cColS',SFECHAS,[ds('Colesterol total',SD.col,'#e67e22',{fill:true}),refLine(200,'Límite (<200)')],{min:180,max:275});
+  // Escalas calculadas con los datos: un análisis nuevo fuera del rango
+  // de siempre ya no queda cortado fuera del dibujo.
+  mkLineC('cTSH', SFECHAS,[ds('TSH',SD.tsh,'#e74c3c',{spanGaps:false}),refLine(4.45,'Límite (4.45)')],rangoAuto(SD.tsh,[4.45],{piso:0}));
+  mkLineC('cVitD',SFECHAS,[ds('Vitamina D',SD.vitD,'#2980b9',{spanGaps:true,fill:true}),refLine(30,'Suficiencia (30)')],rangoAuto(SD.vitD,[30],{piso:0}));
+  mkLineC('cHgb', SFECHAS,[ds('Hemoglobina',SD.hgb,'#8e44ad',{fill:true}),refLine(12.0,'Mín. (12.0)')],rangoAuto(SD.hgb,[12]));
+  mkLineC('cColS',SFECHAS,[ds('Colesterol total',SD.col,'#e67e22',{fill:true}),refLine(200,'Límite (<200)')],rangoAuto(SD.col,[200]));
 
   // Tabla de marcadores
   let html='';
   SSECTIONS.forEach(sec=>{
-    html+=`<tr class="tbl-sep"><td colspan="6">${sec.title}</td></tr>`;
+    html+=`<tr class="tbl-sep"><td colspan="${2+SFECHAS.length}">${sec.title}</td></tr>`;
     sec.rows.forEach(r=>{
       html+=`<tr>
         <td style="font-weight:600;color:#333;white-space:normal;min-width:120px">
@@ -197,11 +199,15 @@ function initSangre() {
         <td style="color:#aaa;font-size:0.68rem;font-weight:400;text-align:left;white-space:normal">
           ${r.unit}<br><span style="color:#bbb">${r.ref}</span>
         </td>
-        ${sCell(r.key,0,SFECHAS[0])}${sCell(r.key,1,SFECHAS[1])}
-        ${sCell(r.key,2,SFECHAS[2])}${sCell(r.key,3,SFECHAS[3])}</tr>`;
+        ${SFECHAS.map((f,i)=>sCell(r.key,i,f)).join('')}</tr>`;
     });
   });
   document.getElementById('tbodySangre').innerHTML = html;
+  // Una columna por análisis, los que haya. Antes eran cuatro fijas.
+  const thead = document.getElementById('theadSangre');
+  if(thead) thead.innerHTML = `<th style="text-align:left;min-width:130px">Marcador</th>
+    <th style="text-align:left;min-width:110px;font-size:0.62rem">Unidad · Referencia</th>` +
+    SFECHAS.map(f => `<th>${esc(f)}</th>`).join('');
 }
 
 
